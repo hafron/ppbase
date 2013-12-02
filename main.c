@@ -214,7 +214,7 @@ main() {
 		pcommand = bsearch(command, db_command_s, COUNT(db_command_s), sizeof(char *), const_strcmp);
 
 		if (pcommand == NULL) 
-				puts(PROMPT);
+				fputs(PROMPT, stdout);
 		else {
 			switch ((enum db_command)(pcommand - db_command_s)) {
 				case dodaj:
@@ -279,7 +279,7 @@ main() {
 					exit(EXIT_SUCCESS);
 					break;
 				default:
-					puts(PROMPT);
+					fputs(PROMPT, stdout);
 					break;
 			}
 		}
