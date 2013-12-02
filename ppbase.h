@@ -3,6 +3,13 @@
 #define ENDL "\n"
 #define PROMPT "? "
 
+#define TOKEN_ROW_START '('
+#define TOKEN_ROW_END ')'
+#define TOKEN_ROW_SEPARATOR ','
+#define TOKEN_STRING_SEPARATOR '"'
+
+#define ERR_UNKNOWN_COLUMN_TYPE "Column '%s' in '%s': unknown column type." ENDL
+
 #define MAX(A, B)               ((A) > (B) ? (A) : (B))
 #define MIN(A, B)               ((A) < (B) ? (A) : (B))
 
@@ -18,8 +25,8 @@ void die(const char *errstr, ...);
 #define ENDL "\r\n"
 #endif
 
-enum _command {dodaj, koniec, usun, wczytaj, wczytajwszystko, zapisz, zapiszwszystko};
-const char *_command_s[] = {"dodaj", "koniec", "usun", "wczytaj", "wczytajwszystko", "zapisz", "zapiszwszystko"};
+enum db_command {dodaj, koniec, usun, wczytaj, wczytajwszystko, wypisz, zapisz, zapiszwszystko};
+const char *db_command_s[] = {"dodaj", "koniec", "usun", "wczytaj", "wczytajwszystko", "wypisz", "zapisz", "zapiszwszystko"};
 #define COUNT(o) (sizeof(o)/sizeof((o)[0]))
 
 /* Save one word from char *line into char *word
@@ -27,4 +34,3 @@ const char *_command_s[] = {"dodaj", "koniec", "usun", "wczytaj", "wczytajwszyst
  */
 char *
 getword(const char *line, char *word, int word_len);
-
