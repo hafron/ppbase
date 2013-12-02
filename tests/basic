@@ -1,3 +1,4 @@
-dodaj liczby (1)
-dodaj liczby (1) (2) (3)
-wypisz liczby
+dodaj studenci(imie) ("Mohammed")
+dodaj studenci(nazwisko, imie) ("Uchicha", "Itachi") ("Uchicha", "Sasuke")
+dodaj studenci (1234, "Szymon", "Olewniczak") (4435, "Jan", "Kanty")
+wypisz studenci

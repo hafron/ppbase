@@ -3,17 +3,22 @@
 
 #define DB_MAX_STRING 255
 
+#define DB_STRING_LEN DB_MAX_STRING+1
 enum db_type {db_type_string, db_type_int, db_type_double, db_type_bool, db_type_ai};
 
 typedef int db_int;
 typedef double db_double;
-typedef char db_string[DB_MAX_ROWS+1];
+typedef char db_string[DB_STRING_LEN];
 typedef int db_bool;
 typedef unsigned db_ai;
 
 struct List_db_int {
 	db_int v;
 	struct List_db_int *next;
+};
+struct List_db_string {
+	db_string v;
+	struct List_db_string *next;
 };
 
 union Row {
@@ -23,6 +28,7 @@ union Row {
 
 union Uni_list {
 	struct List_db_int *db_type_int;
+	struct List_db_string *db_type_string;
 };
 
 struct Table {
@@ -34,6 +40,7 @@ struct Table {
 	int ai[DB_MAX_COLUMNS]; 
 	int row;
 	union Uni_list data[DB_MAX_COLUMNS];
+	union Uni_list last_row[DB_MAX_COLUMNS];
 };
 
 struct Table db_tables[] = {
