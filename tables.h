@@ -15,10 +15,12 @@ typedef unsigned db_ai;
 struct List_db_int {
 	db_int v;
 	struct List_db_int *next;
+	struct List_db_int *prev;
 };
 struct List_db_string {
 	db_string v;
 	struct List_db_string *next;
+	struct List_db_string *prev;
 };
 
 union Row {
@@ -29,6 +31,7 @@ union Row {
 union Uni_list {
 	struct List_db_int *db_type_int;
 	struct List_db_string *db_type_string;
+	void *db_type_void;
 };
 
 struct Table {

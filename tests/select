@@ -1,7 +1,6 @@
-dodaj studenci(imie) ("Mohammed")
+dodaj studenci(nazwisko, imie) ("Al piestor", "Mohammed")
 dodaj studenci(nazwisko, imie) ("Uchicha", "Itachi") ("Uchicha", "Sasuke")
 dodaj studenci (1234, "Szymon", "Olewniczak") (4435, "Jan", "Kanty")
-wypisz studenci
-wypisz studenci(imie)
 
-wypisz studenci(nazwisko, nazwisko,imie)
+
+wypisz studenci(nazwisko,imie) gdzie indeks > 100 zakres 2- 3

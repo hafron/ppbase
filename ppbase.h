@@ -7,13 +7,18 @@
 #define TOKEN_ROW_END ')'
 #define TOKEN_ROW_SEPARATOR ','
 #define TOKEN_STRING_SEPARATOR '"'
+#define TOKEN_SCOPE_SEPARATOR '-'
+
+#define COMMAND_ORDER "wedlug"
+#define COMMAND_WHERE "gdzie"
+#define COMMAND_LIMIT "zakres"
 
 #define ERR_UNKNOWN_COLUMN_TYPE "Column '%s' in '%s': unknown column type." ENDL
+#define ERR_UNKNOWN_COLUMN "Column '%s' in '%s' does not exists." ENDL
+#define ERR_OUT_OF_MEM "Out of memory." ENDL
 
-#define MAX(A, B)               ((A) > (B) ? (A) : (B))
-#define MIN(A, B)               ((A) < (B) ? (A) : (B))
+#define LIMIT_INT_MAX_LEN 50+1
 
-void die(const char *errstr, ...);
 
 #ifdef WINDOWS
 #undef LINE_LEN
@@ -27,10 +32,10 @@ void die(const char *errstr, ...);
 
 enum db_command {dodaj, koniec, usun, wczytaj, wczytajwszystko, wypisz, zapisz, zapiszwszystko};
 const char *db_command_s[] = {"dodaj", "koniec", "usun", "wczytaj", "wczytajwszystko", "wypisz", "zapisz", "zapiszwszystko"};
+enum db_where_cond {none, lt, gt, eq, neq};
 #define COUNT(o) (sizeof(o)/sizeof((o)[0]))
 
+void die(const char *errstr, ...);
 /* Save one word from char *line into char *word
  * @return char *p line without found world
  */
-char *
-getword(const char *line, char *word, int word_len);
