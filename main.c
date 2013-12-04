@@ -3,6 +3,7 @@
 #include <string.h>
 #include <ctype.h>
 #include <stdarg.h>
+#include <setjmp.h>
 
 #include "ppbase.h"
 #include "tables.h"
@@ -316,13 +317,13 @@ get_where(char *line, char *column, int col_len, char *value, int val_len, enum 
 }
 
 int
-col_exists(struct Table *t, char *name) {
+col_id(struct Table *t, char *name) {
 	int i;
 	for (i = 0; i < t->count; i++)
 		if (strcmp(t->col_names[i], name) == 0)
-			return 1;
+			return i;
 
-	return 0;
+	return -1;
 }
 
 char *
@@ -422,19 +423,147 @@ copy_table_row(struct Table *t, size_t ind) {
 		return new;
 	}
 }
+struct List_size_t *
+add_size_t_list(struct List_size_t *last, struct List_size_t **start, int i) {
+	struct List_size_t *new;
+	new = (struct List_size_t *)malloc(sizeof(struct List_size_t));
+	new->v = i;
+	if (*start == NULL) {
+		*start = new;
+	} else if(last != NULL) {
+		last->next = new;
+	}
+	return new;
+}
+/*Returns rows that lefts*/
+struct List_size_t *
+filter_list(struct Table *t, size_t filter_col_id, enum db_where_cond where_cond, char *where_val, size_t *rows_left_len) {
+	struct List_size_t *start, *act;
+	int i;
+	jmp_buf env;
+
+	union Row cell;
+	int order[1];
+
+	struct List_db_int *pint;
+
+	order[0] = filter_col_id;
+	get_cell(t, where_val, &cell, order, 1);
+
+	start = act = NULL;
+	*rows_left_len = 0;
+	switch(t->cols[filter_col_id]) {
+		case db_type_int:
+			pint = t->data[filter_col_id].db_type_int;
+			for (i = 0; i < t->row; i++, pint = pint->next) {
+				if (setjmp(env) == 0) {
+					switch (where_cond) {
+						case lt:
+							if (pint->v < cell.db_type_int)
+								longjmp(env, 1);
+							break;
+						case gt:
+							if (pint->v > cell.db_type_int)
+								longjmp(env, 1);
+							break;
+						case eq:
+							if (pint->v == cell.db_type_int)
+								longjmp(env, 1);
+							break;
+						case neq:
+							if (pint->v != cell.db_type_int)
+								longjmp(env, 1);
+							break;
+						default:
+							/*You should never reach it.*/
+							return NULL;
+							break;
+					}
+				} else {
+					act = add_size_t_list(act, &start, i);
+					(*rows_left_len)++;
+				}
+			}
+			return start;
+			break;
+		case db_type_string:
+			break;
+		default:
+			die(ERR_UNKNOWN_COLUMN_TYPE, t->col_names[filter_col_id], t->name);
+			break;
+	}
+	return NULL;
+}
+
+void
+free_list(struct List_db_void *elm, enum db_type type) {
+	switch(type) {
+		case db_type_int:
+			free((struct List_db_int*) elm);
+			break;
+		case db_type_string:
+			free((struct List_db_string*) elm);
+			break;
+		default:
+			/*Should not reach*/
+			return ;
+			break;
+	}
+}
+
+void
+filter(struct Table *t, union Uni_list *data, struct List_size_t *rows_left, int rows_left_len) {
+	int cur_ind, diff, i, j;
+	struct List_db_void *last;
+
+	cur_ind = 0;
+	if (rows_left != NULL && rows_left->v != 0) {
+		diff = rows_left->v - cur_ind;
+		for (i = 0; i < t->count; i++)  {
+			for (j = 0; j < diff; j++) {
+				last = data[i].db_type_void->next;
+				free_list(data[i].db_type_void, t->cols[i]);
+			}
+			data[i].db_type_void = last;
+		}
+	}
+
+	cur_ind = rows_left->v + 1;
+	rows_left = rows_left->next;
+
+	while (rows_left != NULL) {
+		diff = rows_left->v - cur_ind;
+		for (i = 0; i < t->count; i++) {
+			last = data[i].db_type_void->next;
+			for (j = 0; j < diff; j++) {
+				/*free_list(last, t->cols[i]);*/
+				free(last);
+				last = last->next;
+			}
+			data[i].db_type_void->next = last;
+		}
+		
+		cur_ind = rows_left->v + 1;
+		rows_left = rows_left->next;
+	}
+}
 
 int
 main() {
-	int i, j, k, order_len, desc;
+	int i, j, k, order_len, desc, filter_col_id, sort_col_id;
 	int order[DB_MAX_COLUMNS+1];/* +1 for "-1" which indicates end of the row */
-	size_t limit_start, limit_rows;
+	size_t limit_start, limit_rows, left_rows_len;
 	char line[LINE_LEN], command[LINE_LEN], table[LINE_LEN], row[LINE_LEN], sort_col[LINE_LEN];
 	char where_col[LINE_LEN], where_val[LINE_LEN];
     char *pline;
 	const char **pcommand;
+
 	struct Table *t;
+	struct List_size_t *left_rows;
+
 	union Row *urows;
 	union Uni_list data[DB_MAX_COLUMNS];
+
 	enum db_where_cond where_cond;
 
 	init_database();
@@ -475,13 +604,13 @@ main() {
 						goto command_loop;
 
 					pline = get_sort(pline, sort_col, LINE_LEN, &desc);
-					if (desc != -1 && !col_exists(t, sort_col)) {
+					if (desc != -1 && (sort_col_id = col_id(t, sort_col) == -1)) {
 						fprintf(stderr, ERR_UNKNOWN_COLUMN, sort_col, t->name);
 						goto command_loop;
 					}
 
 					pline = get_where(pline, where_col, LINE_LEN, where_val, LINE_LEN, &where_cond);
-					if (where_cond != -1 && !col_exists(t, where_col)) {
+					if (where_cond != -1 && (filter_col_id = col_id(t, where_col)) == -1) {
 						fprintf(stderr, ERR_UNKNOWN_COLUMN, where_col, t->name);
 						goto command_loop;
 					} else if (where_cond == none) {
@@ -509,6 +638,10 @@ main() {
 							printf("%s%s", t->col_names[k], i == order_len-1 ? ENDL : " ");
 							data[i] = data[k];
 						}
+						left_rows = filter_list(t, filter_col_id, where_cond, where_val, &left_rows_len);
+
+						filter(t, data, left_rows, left_rows_len);
+
 						for (i = 0; i < t->row; i++) 
 							for (j = 0; j < order_len; j++) {
 								k = order[j];

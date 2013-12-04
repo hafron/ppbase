@@ -30,6 +30,11 @@
 #define ENDL "\r\n"
 #endif
 
+struct List_size_t {
+	size_t v;
+	struct List_size_t *next;
+};
+
 enum db_command {dodaj, koniec, usun, wczytaj, wczytajwszystko, wypisz, zapisz, zapiszwszystko};
 const char *db_command_s[] = {"dodaj", "koniec", "usun", "wczytaj", "wczytajwszystko", "wypisz", "zapisz", "zapiszwszystko"};
 enum db_where_cond {none, lt, gt, eq, neq};
