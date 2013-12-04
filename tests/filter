@@ -3,4 +3,4 @@ dodaj studenci(indeks, nazwisko, imie) (10, "Uchicha", "Itachi") (20, "Uchicha",
 dodaj studenci (1234, "Szymon", "Olewniczak") (4435, "Jan", "Kanty")
 
 
-wypisz studenci(nazwisko,imie) gdzie indeks > 100 zakres 2- 3
+wypisz studenci(indeks,nazwisko,imie) gdzie indeks < 100 zakres 2- 3

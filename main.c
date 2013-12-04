@@ -495,56 +495,64 @@ filter_list(struct Table *t, size_t filter_col_id, enum db_where_cond where_cond
 	return NULL;
 }
 
-void
-free_list(struct List_db_void *elm, enum db_type type) {
-	switch(type) {
-		case db_type_int:
-			free((struct List_db_int*) elm);
-			break;
-		case db_type_string:
-			free((struct List_db_string*) elm);
-			break;
-		default:
-			/*Should not reach*/
-			return ;
-			break;
-	}
-}
-
+/*filter nie odcina się od rekordów które są za rekordami wybranymi*/
 void
 filter(struct Table *t, union Uni_list *data, struct List_size_t *rows_left, int rows_left_len) {
 	int cur_ind, diff, i, j;
-	struct List_db_void *last;
+	struct List_db_void *last, **last_left, *temp;
 
+	last_left = (struct List_db_void **)calloc(sizeof(struct List_db_void), t->count);
 	cur_ind = 0;
-	if (rows_left != NULL && rows_left->v != 0) {
-		diff = rows_left->v - cur_ind;
-		for (i = 0; i < t->count; i++)  {
-			for (j = 0; j < diff; j++) {
-				last = data[i].db_type_void->next;
-				free_list(data[i].db_type_void, t->cols[i]);
-			}
+
+	diff = rows_left->v - cur_ind;
+	for (i = 0; i < t->count; i++)  {
+		for (j = 0; j < diff; j++) {
+			last = data[i].db_type_void->next;
+			free(data[i].db_type_void);
 			data[i].db_type_void = last;
 		}
+		last_left[i] = data[i].db_type_void;
 	}
 
 	cur_ind = rows_left->v + 1;
 	rows_left = rows_left->next;
 
+
 	while (rows_left != NULL) {
 		diff = rows_left->v - cur_ind;
-		for (i = 0; i < t->count; i++) {
-			last = data[i].db_type_void->next;
-			for (j = 0; j < diff; j++) {
-				/*free_list(last, t->cols[i]);*/
-				free(last);
-				last = last->next;
+		if (diff > 0) {
+			for (i = 0; i < t->count; i++) {
+				last = last_left[i]->next;
+				for (j = 0; j < diff; j++) {
+					temp = last->next;
+					free(last);
+					last = temp;
+				}
+				last_left[i]->next = last;
+				last_left[i] = last;
+
+				t->last_row[i].db_type_void = last_left[i];
 			}
-			data[i].db_type_void->next = last;
+			t->row -= diff;
 		}
-		
 		cur_ind = rows_left->v + 1;
 		rows_left = rows_left->next;
+	}
+}
+
+void
+free_data(struct Table *t, union Uni_list *data) {
+	int i;
+
+	struct List_db_void *next, *temp;
+
+	for (i = 0; i < t->count; i++) {
+		next = data[i].db_type_void;
+		while (next != NULL) {
+			temp = next->next;
+			free(next);
+			next = temp;
+		}
 	}
 }
 
@@ -562,11 +570,10 @@ main() {
 	struct List_size_t *left_rows;
 
 	union Row *urows;
-	union Uni_list data[DB_MAX_COLUMNS];
+	union Uni_list data[DB_MAX_COLUMNS], data_cpy[DB_MAX_COLUMNS];
 
 	enum db_where_cond where_cond;
 
-	init_database();
 
 	command_loop:
 	while (fgets(line, LINE_LEN, stdin) != NULL) {
@@ -625,7 +632,6 @@ main() {
 						goto command_loop;
 					}
 
-					printf("Liczba rekordow: %d" ENDL, t->row);
 					if (t->row > 0) {
 						for (i = 0; i < t->count; i++) {
 							data[i] = copy_table_row(t, i);
@@ -633,14 +639,22 @@ main() {
 								die(ERR_OUT_OF_MEM);
 							}
 						}
+						if (where_cond != -1) {
+							left_rows = filter_list(t, filter_col_id, where_cond, where_val, &left_rows_len);
+							filter(t, data, left_rows, left_rows_len);
+						}
+						printf("Liczba rekordow: %d" ENDL, t->row);
+
+						for (i = 0; i < t->count; i++) {
+							data_cpy[i] = data[i];
+						}
+
 						for (i = 0; i < order_len; i++) {
 							k = order[i];
 							printf("%s%s", t->col_names[k], i == order_len-1 ? ENDL : " ");
-							data[i] = data[k];
+							data[i] = data_cpy[k];
 						}
-						left_rows = filter_list(t, filter_col_id, where_cond, where_val, &left_rows_len);
 
-						filter(t, data, left_rows, left_rows_len);
 
 						for (i = 0; i < t->row; i++) 
 							for (j = 0; j < order_len; j++) {
@@ -659,6 +673,8 @@ main() {
 										break;
 								}
 							}
+						/*Free the memory*/
+						free_data(t, data);
 					}
 					break;
 				case koniec:
