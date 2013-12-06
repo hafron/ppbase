@@ -37,7 +37,7 @@ struct List_size_t {
 
 enum db_command {dodaj, koniec, usun, wczytaj, wczytajwszystko, wypisz, zapisz, zapiszwszystko};
 const char *db_command_s[] = {"dodaj", "koniec", "usun", "wczytaj", "wczytajwszystko", "wypisz", "zapisz", "zapiszwszystko"};
-enum db_where_cond {none, lt, gt, eq, neq};
+enum db_where_cond {none, lt, gt, eq, neq, le, ge};
 #define COUNT(o) (sizeof(o)/sizeof((o)[0]))
 
 void die(const char *errstr, ...);

@@ -428,7 +428,7 @@ add_size_t_list(struct List_size_t *last, struct List_size_t **start, int i) {
 	}
 	return new;
 }
-/*Returns rows that lefts*/
+
 struct List_size_t *
 filter_list(struct Table *t, size_t filter_col_id, enum db_where_cond where_cond, char *where_val, size_t *rows_left_len) {
 	struct List_size_t *start, *act;
@@ -465,6 +465,14 @@ filter_list(struct Table *t, size_t filter_col_id, enum db_where_cond where_cond
 							break;
 						case neq:
 							if (pint->v != cell.db_type_int)
+								longjmp(env, 1);
+							break;
+						case le:
+							if (pint->v <= cell.db_type_int)
+								longjmp(env, 1);
+							break;
+						case ge:
+							if (pint->v >= cell.db_type_int)
 								longjmp(env, 1);
 							break;
 						default:
@@ -507,17 +515,14 @@ free_data(struct Table *t) {
 
 void
 filter(struct Table *t, struct List_size_t *rows_left, int rows_left_len) {
-	int diff, i, j, prev_length;
+	int diff, i, j;
 	size_t cur_ind;
-	struct List_db_void *last, **last_left, *temp;
+	struct List_db_void *last, *temp;
 
 	if (rows_left == NULL) {
 		free_data(t);
 		return ;
 	}
-
-	/*last_left = (struct List_db_void **)calloc(sizeof(struct List_db_void), t->count);*/
-	prev_length = t->row;
 
 	cur_ind = 0;
 	diff = rows_left->v;
@@ -527,43 +532,28 @@ filter(struct Table *t, struct List_size_t *rows_left, int rows_left_len) {
 			free(t->data[i].db_type_void);
 			t->data[i].db_type_void = last;
 		}
-		/*last_left[i] = t->data[i].db_type_void;*/
 		t->last_row[i] = t->data[i];
 	}
 	t->row -= diff;
 
-	/*cur_ind = rows_left->v + 1;*/
 	cur_ind = diff;
 	rows_left = rows_left->next;
 
 
 	while (rows_left != NULL) {
 		diff = rows_left->v - cur_ind - 1;
-		/*if (diff > 0) {*/
 			for (i = 0; i < t->count; i++) {
-				/*last = last_left[i]->next;*/
 				last = t->last_row[i].db_type_void->next;
 				for (j = 0; j < diff; j++) {
 					temp = last->next;
 					free(last);
 					last = temp;
 				}
-				/*last_left[i]->next = last;
-				last_left[i] = last;*/
 				t->last_row[i].db_type_void->next = last;
 				t->last_row[i].db_type_void = last;
-
-				/*t->last_row[i].db_type_void = last_left[i];*/
 			}
 			t->row -= diff;
-		/*} else {
-			for (i = 0; i < t->count; i++) {
-				last_left[i] = last_left[i]->next;
-				t->last_row[i].db_type_void = last_left[i];
-			}
-		}*/
-
-		cur_ind = rows_left->v;/* + 1;*/
+		cur_ind = rows_left->v;
 		rows_left = rows_left->next;
 	}
 	
@@ -579,22 +569,6 @@ filter(struct Table *t, struct List_size_t *rows_left, int rows_left_len) {
 		t->last_row[i].db_type_void->next = NULL;
 	}
 	t->row -= diff;
-
-	/*cur_ind -= 1;*/
-	/*prev_length -= 1;
-	if (cur_ind < prev_length) {
-		diff = prev_length - cur_ind;
-		for (i = 0; i < t->count; i++) {
-			last = t->last_row[i].db_type_void->next;
-			for (j = 0; j < diff; j++) {
-				temp = last->next;
-				free(last);
-				last = temp;
-			}
-			t->last_row[i].db_type_void = last;
-		}
-		t->row -= diff;
-	}*/
 }
 
 
@@ -613,6 +587,26 @@ table_copy(struct Table *to, struct Table *from) {
 		to->ai[i] = from->ai[i];
 
 		copy_table_row(to, from, i);
+	}
+}
+
+enum db_where_cond
+de_morgan(enum db_where_cond cond) {
+	switch(cond) {
+		case eq:
+			return neq;
+		case neq:
+			return eq;
+		case lt:
+			return ge;
+		case gt:
+			return le;
+		case le:
+			return gt;
+		case ge:
+			return lt;
+		default:
+			return -1;
 	}
 }
 
@@ -755,7 +749,7 @@ main() {
 				}
 
 				if (t->row > 0 && where_cond != -1) {
-					left_rows = filter_list(t, filter_col_id, where_cond, where_val, &left_rows_len);
+					left_rows = filter_list(t, filter_col_id, de_morgan(where_cond), where_val, &left_rows_len);
 					i = t->row - left_rows_len;
 					filter(t, left_rows, left_rows_len);
 				} else {
