@@ -123,10 +123,8 @@ db_add_row(struct Table *t, const union Row *urow) {
 					nint->next = NULL;
 					if (t->last_row[i].db_type_int == NULL) {
 						t->data[i].db_type_int = t->last_row[i].db_type_int = nint;
-						nint->prev = NULL;
 					} else {
 						t->last_row[i].db_type_int->next = nint;
-						nint->prev = t->last_row[i].db_type_int;
 						t->last_row[i].db_type_int= nint;
 					}
 					break;
@@ -136,10 +134,8 @@ db_add_row(struct Table *t, const union Row *urow) {
 					nstring->next = NULL;
 					if (t->last_row[i].db_type_string == NULL) {
 						t->data[i].db_type_string = t->last_row[i].db_type_string = nstring;
-						nint->prev = NULL;
 					} else {
 						t->last_row[i].db_type_string->next = nstring;
-						nstring->prev = t->last_row[i].db_type_string;
 						t->last_row[i].db_type_string= nstring;
 					}
 					break;
@@ -223,7 +219,7 @@ get_cell(const struct Table *t, const char *row, union Row *urows, const int *or
 }
 
 int
-str_search(const char *needle, const char **haystack, int length) {
+str_search(char *needle, char **haystack, int length) {
 	int i;
 	for (i = 0; i < length; i++) 
 		if (strcmp(needle, haystack[i]) == 0)
@@ -371,20 +367,57 @@ get_limit(char *line, size_t *start, size_t *length) {
 	}
 }
 
-union Uni_list
-copy_table_row(struct Table *t, size_t ind) {
-	union Uni_list new;
-	struct List_db_int *nint, *xint, *oint;
-	struct List_db_string *nstring, *xstring, *ostring;
+/*implempntation of last_row*/
+void
+copy_table_row(struct Table *to, struct Table *from, size_t i) {
+	/*struct List_db_int *nint, *xint, *oint;*/
+	struct List_db_string *old_string, *new_string;
+	struct List_db_int *old_int, *new_int;
 
-	if (t->row > 0) {
-		switch(t->cols[ind]) {
+	switch(to->cols[i]) {
+		case db_type_int:
+			new_int = to->data[i].db_type_int = (struct List_db_int *)malloc(sizeof(struct List_db_int));
+			old_int = from->data[i].db_type_int;
+			
+			to->data[i].db_type_int->next = NULL;
+			to->data[i].db_type_int->v = old_int->v;
+
+			while ((old_int = old_int->next) != NULL) {
+				new_int->next = (struct List_db_int *)malloc(sizeof(struct List_db_int));
+				new_int = new_int->next;
+				new_int->v = old_int->v;
+				new_int->next = NULL;
+			}
+			to->last_row[i].db_type_int = new_int;
+			break;
+		case db_type_string:
+			new_string = to->data[i].db_type_string = (struct List_db_string *)malloc(sizeof(struct List_db_string));
+			old_string = from->data[i].db_type_string;
+			
+			to->data[i].db_type_string->next = NULL;
+			strcpy(to->data[i].db_type_string->v, old_string->v);
+
+			while ((old_string = old_string->next) != NULL) {
+				new_string->next = (struct List_db_string *)malloc(sizeof(struct List_db_string));
+				new_string = new_string->next;
+				strcpy(new_string->v, old_string->v);
+				new_string->next = NULL;
+			}
+			to->last_row[i].db_type_string = new_string;
+			break;
+		default:
+			die(ERR_UNKNOWN_COLUMN_TYPE, to->col_names[i], to->name);
+			break;
+	}
+
+		/*switch(t->cols[i]) {
 			case db_type_int:
-				oint = t->data[ind].db_type_int;
+				oint = from->data[i].db_type_int;
 				nint = (struct List_db_int *)malloc(sizeof(struct List_db_int ));
 				nint->v = oint->v;
-				nint->prev = nint->next = NULL;
+				nint->next = NULL;
 				new.db_type_int = nint;
+
 				while ((oint = oint->next) != NULL) {
 					xint = (struct List_db_int *)malloc(sizeof(struct List_db_int ));
 					xint->v = oint->v;
@@ -417,11 +450,7 @@ copy_table_row(struct Table *t, size_t ind) {
 				die(ERR_UNKNOWN_COLUMN_TYPE, t->col_names[ind], t->name);
 				break;
 		}
-		return new;
-	} else {
-		new.db_type_void = NULL;
-		return new;
-	}
+	}*/
 }
 struct List_size_t *
 add_size_t_list(struct List_size_t *last, struct List_size_t **start, int i) {
@@ -495,10 +524,10 @@ filter_list(struct Table *t, size_t filter_col_id, enum db_where_cond where_cond
 	return NULL;
 }
 
-/*filter nie odcina się od rekordów które są za rekordami wybranymi*/
 void
-filter(struct Table *t, union Uni_list *data, struct List_size_t *rows_left, int rows_left_len) {
-	int cur_ind, diff, i, j;
+filter(struct Table *t, struct List_size_t *rows_left, int rows_left_len) {
+	int diff, i, j;
+	size_t cur_ind;
 	struct List_db_void *last, **last_left, *temp;
 
 	last_left = (struct List_db_void **)calloc(sizeof(struct List_db_void), t->count);
@@ -507,12 +536,13 @@ filter(struct Table *t, union Uni_list *data, struct List_size_t *rows_left, int
 	diff = rows_left->v - cur_ind;
 	for (i = 0; i < t->count; i++)  {
 		for (j = 0; j < diff; j++) {
-			last = data[i].db_type_void->next;
-			free(data[i].db_type_void);
-			data[i].db_type_void = last;
+			last = t->data[i].db_type_void->next;
+			free(t->data[i].db_type_void);
+			t->data[i].db_type_void = last;
 		}
-		last_left[i] = data[i].db_type_void;
+		last_left[i] = t->data[i].db_type_void;
 	}
+	t->row -= diff;
 
 	cur_ind = rows_left->v + 1;
 	rows_left = rows_left->next;
@@ -534,25 +564,66 @@ filter(struct Table *t, union Uni_list *data, struct List_size_t *rows_left, int
 				t->last_row[i].db_type_void = last_left[i];
 			}
 			t->row -= diff;
+		} else {
+			for (i = 0; i < t->count; i++) {
+				last_left[i] = last_left[i]->next;
+				t->last_row[i].db_type_void = last_left[i];
+			}
 		}
 		cur_ind = rows_left->v + 1;
 		rows_left = rows_left->next;
 	}
+	cur_ind -= 1;
+	if (cur_ind < t->row) {
+		diff = t->row - cur_ind;
+		for (i = 0; i < t->count; i++) {
+			last = last_left[i]->next;
+			for (j = 0; j < diff; j++) {
+				temp = last->next;
+				free(last);
+				last = temp;
+			}
+			last_left[i]->next = last;
+			last_left[i] = last;
+
+			t->last_row[i].db_type_void = last_left[i];
+		}
+		t->row -= diff;
+	}
 }
 
 void
-free_data(struct Table *t, union Uni_list *data) {
+free_data(struct Table *t) {
 	int i;
-
 	struct List_db_void *next, *temp;
 
 	for (i = 0; i < t->count; i++) {
-		next = data[i].db_type_void;
+		next = t->data[i].db_type_void;
 		while (next != NULL) {
 			temp = next->next;
 			free(next);
 			next = temp;
 		}
+		t->data[i].db_type_void = t->last_row[i].db_type_void = NULL;
+	}
+	t->row = 0;
+}
+
+void
+table_copy(struct Table *to, struct Table *from) {
+	int i, j;
+	to->name = from->name;
+	to->count = from->count;
+	to->row = from->row;
+
+	for (i = 0; i < to->count; i++) {
+		to->col_names[i] = from->col_names[i];
+		to->cols[i] = from->cols[i];
+		for (j = 0; j < 2; j++) 
+			to->clamp[i][j] = from->clamp[i][j];
+		to->ai[i] = from->ai[i];
+
+		copy_table_row(to, from, i);
 	}
 }
 
@@ -566,11 +637,11 @@ main() {
     char *pline;
 	const char **pcommand;
 
-	struct Table *t;
+	struct Table *t, temp_t;
 	struct List_size_t *left_rows;
 
 	union Row *urows;
-	union Uni_list data[DB_MAX_COLUMNS], data_cpy[DB_MAX_COLUMNS];
+	union Uni_list data[DB_MAX_COLUMNS];
 
 	enum db_where_cond where_cond;
 
@@ -580,110 +651,136 @@ main() {
 		pline = getword(line, command, LINE_LEN, isrestr);
 		pcommand = bsearch(command, db_command_s, COUNT(db_command_s), sizeof(char *), const_strcmp);
 
-		if (pcommand == NULL) 
-				fputs(PROMPT, stdout);
-		else {
-			switch ((enum db_command)(pcommand - db_command_s)) {
-				case dodaj:
-					pline = getword(pline, table, LINE_LEN, isrestr);
-					if ((t = gettab(table)) == NULL)
-						printf("Unknown table '%s'." ENDL, table);
-					else {
-						if ((pline = determine_order(t, pline, order, &order_len)) == NULL)
-							goto command_loop;
+		if (pcommand == NULL) {
+			fputs(PROMPT, stdout);
+			goto command_loop;
+		}
 
-						j = 0;
-						while ((pline = get_row_token(pline, row, LINE_LEN)) != NULL) {
-							urows = (union Row *) calloc(t->count, sizeof(union Row));
-							get_cell(t, row, urows, order, order_len);
-							j += db_add_row(t, urows);
-						}
-						printf("Liczba dodanych rekordów: %d" ENDL, j);
-					}
-
-					break;
-				case wypisz:
-					pline = getword(pline, table, LINE_LEN, isrestr);
-					if ((t = gettab(table)) == NULL)
-						printf("Unknown table '%s'." ENDL, table);
-					
+		switch ((enum db_command)(pcommand - db_command_s)) {
+			case dodaj:
+				pline = getword(pline, table, LINE_LEN, isrestr);
+				if ((t = gettab(table)) == NULL)
+					printf("Unknown table '%s'." ENDL, table);
+				else {
 					if ((pline = determine_order(t, pline, order, &order_len)) == NULL)
 						goto command_loop;
 
-					pline = get_sort(pline, sort_col, LINE_LEN, &desc);
-					if (desc != -1 && (sort_col_id = col_id(t, sort_col) == -1)) {
-						fprintf(stderr, ERR_UNKNOWN_COLUMN, sort_col, t->name);
-						goto command_loop;
+					j = 0;
+					while ((pline = get_row_token(pline, row, LINE_LEN)) != NULL) {
+						urows = (union Row *) calloc(t->count, sizeof(union Row));
+						get_cell(t, row, urows, order, order_len);
+						j += db_add_row(t, urows);
+					}
+					printf("Liczba dodanych rekordow: %d" ENDL, j);
+				}
+
+				break;
+			case wypisz:
+				pline = getword(pline, table, LINE_LEN, isrestr);
+				if ((t = gettab(table)) == NULL) {
+					printf("Unknown table '%s'." ENDL, table);
+					goto command_loop;
+				}
+				
+				if ((pline = determine_order(t, pline, order, &order_len)) == NULL)
+					goto command_loop;
+
+				pline = get_sort(pline, sort_col, LINE_LEN, &desc);
+				if (desc != -1 && (sort_col_id = col_id(t, sort_col) == -1)) {
+					fprintf(stderr, ERR_UNKNOWN_COLUMN, sort_col, t->name);
+					goto command_loop;
+				}
+
+				pline = get_where(pline, where_col, LINE_LEN, where_val, LINE_LEN, &where_cond);
+				if (where_cond != -1 && (filter_col_id = col_id(t, where_col)) == -1) {
+					fprintf(stderr, ERR_UNKNOWN_COLUMN, where_col, t->name);
+					goto command_loop;
+				} else if (where_cond == none) {
+					fprintf(stderr, "Column %s in %s: unknown compare operator in '%s' statment."\
+							, where_col, t->name, COMMAND_WHERE);
+					goto command_loop;
+				}
+
+				pline = get_limit(pline, &limit_start, &limit_rows);
+				if (limit_rows == -1) {
+					fprintf(stderr, "Command '%s': wrong format", COMMAND_LIMIT);
+					goto command_loop;
+				}
+
+				table_copy(&temp_t, t);
+				if (temp_t.row > 0 && where_cond != -1) {
+					left_rows = filter_list(&temp_t, filter_col_id, where_cond, where_val, &left_rows_len);
+					filter(&temp_t, left_rows, left_rows_len);
+				}
+				printf("Liczba rekordow: %d" ENDL, temp_t.row);
+				/*after filtering*/
+				if (temp_t.row > 0) {
+
+					for (i = 0; i < t->count; i++)
+						data[i] = temp_t.data[i];
+
+					for (i = 0; i < order_len; i++) {
+						k = order[i];
+						printf("%s%s", t->col_names[k], i == order_len-1 ? ENDL : " ");
+						temp_t.data[i] = data[k];
 					}
 
-					pline = get_where(pline, where_col, LINE_LEN, where_val, LINE_LEN, &where_cond);
-					if (where_cond != -1 && (filter_col_id = col_id(t, where_col)) == -1) {
-						fprintf(stderr, ERR_UNKNOWN_COLUMN, where_col, t->name);
-						goto command_loop;
-					} else if (where_cond == none) {
-						fprintf(stderr, "Column %s in %s: unknown compare operator in '%s' statment."\
-								, where_col, t->name, COMMAND_WHERE);
-						goto command_loop;
-					}
-					pline = get_limit(pline, &limit_start, &limit_rows);
 
-					if (limit_rows == -1) {
-						fprintf(stderr, "Command '%s': wrong format", COMMAND_LIMIT);
-						goto command_loop;
-					}
-
-					if (t->row > 0) {
-						for (i = 0; i < t->count; i++) {
-							data[i] = copy_table_row(t, i);
-							if (data[i].db_type_void == NULL) {
-								die(ERR_OUT_OF_MEM);
+					for (i = 0; i < temp_t.row; i++) 
+						for (j = 0; j < order_len; j++) {
+							k = order[j];
+							switch (temp_t.cols[k]) {
+								case db_type_int:
+									printf("%d%s", temp_t.data[j].db_type_int->v, j == order_len-1 ? ENDL : " ");
+									temp_t.data[j].db_type_int = temp_t.data[j].db_type_int->next;
+									break;
+								case db_type_string:
+									printf("%s%s", temp_t.data[j].db_type_string->v, j == order_len-1 ? ENDL : " ");
+									temp_t.data[j].db_type_string = temp_t.data[j].db_type_string->next;
+									break;
+								default:
+									die(ERR_UNKNOWN_COLUMN_TYPE, temp_t.col_names[k], temp_t.name);
+									break;
 							}
 						}
-						if (where_cond != -1) {
-							left_rows = filter_list(t, filter_col_id, where_cond, where_val, &left_rows_len);
-							filter(t, data, left_rows, left_rows_len);
-						}
-						printf("Liczba rekordow: %d" ENDL, t->row);
+				}
+				/*Free the memory*/
+				free_data(&temp_t);
+				break;
+			case usun:
 
-						for (i = 0; i < t->count; i++) {
-							data_cpy[i] = data[i];
-						}
+				pline = getword(pline, table, LINE_LEN, isrestr);
+				if ((t = gettab(table)) == NULL) {
+					printf("Unknown table '%s'." ENDL, table);
+					goto command_loop;
+				}
 
-						for (i = 0; i < order_len; i++) {
-							k = order[i];
-							printf("%s%s", t->col_names[k], i == order_len-1 ? ENDL : " ");
-							data[i] = data_cpy[k];
-						}
+				pline = get_where(pline, where_col, LINE_LEN, where_val, LINE_LEN, &where_cond);
+				if (where_cond != -1 && (filter_col_id = col_id(t, where_col)) == -1) {
+					fprintf(stderr, ERR_UNKNOWN_COLUMN, where_col, t->name);
+					goto command_loop;
+				} else if (where_cond == none) {
+					fprintf(stderr, "Column %s in %s: unknown compare operator in '%s' statment."\
+							, where_col, t->name, COMMAND_WHERE);
+					goto command_loop;
+				}
 
-
-						for (i = 0; i < t->row; i++) 
-							for (j = 0; j < order_len; j++) {
-								k = order[j];
-								switch (t->cols[k]) {
-									case db_type_int:
-										printf("%d%s", data[j].db_type_int->v, j == order_len-1 ? ENDL : " ");
-										data[j].db_type_int = data[j].db_type_int->next;
-										break;
-									case db_type_string:
-										printf("%s%s", data[j].db_type_string->v, j == order_len-1 ? ENDL : " ");
-										data[j].db_type_string = data[j].db_type_string->next;
-										break;
-									default:
-										die(ERR_UNKNOWN_COLUMN_TYPE, t->col_names[k], t->name);
-										break;
-								}
-							}
-						/*Free the memory*/
-						free_data(t, data);
-					}
-					break;
-				case koniec:
-					exit(EXIT_SUCCESS);
-					break;
-				default:
-					fputs(PROMPT, stdout);
-					break;
-			}
+				if (t->row > 0 && where_cond != -1) {
+					left_rows = filter_list(t, filter_col_id, where_cond, where_val, &left_rows_len);
+					i = t->row - left_rows_len;
+					filter(t, left_rows, left_rows_len);
+				} else {
+					i = t->row;
+					free_data(&temp_t);
+				}
+				printf("Liczba usunietych rekordow: %d" ENDL, i);
+				break;
+			case koniec:
+				exit(EXIT_SUCCESS);
+				break;
+			default:
+				fputs(PROMPT, stdout);
+				break;
 		}
 	}
 	if (ferror(stdin))

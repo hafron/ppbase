@@ -14,17 +14,14 @@ typedef unsigned db_ai;
 
 struct List_db_int {
 	struct List_db_int *next;
-	struct List_db_int *prev;
 	db_int v;
 };
 struct List_db_string {
 	struct List_db_string *next;
-	struct List_db_string *prev;
 	db_string v;
 };
 struct List_db_void {
 	struct List_db_void *next;
-	struct List_db_void *prev;
 };
 
 union Row {
@@ -39,11 +36,11 @@ union Uni_list {
 };
 
 struct Table {
-	const char *name;
-	const int count; /*number of columns in table*/
-	const char *col_names[DB_MAX_COLUMNS];
-	const enum db_type cols[DB_MAX_COLUMNS]; 
-	const int clamp[DB_MAX_COLUMNS][2]; 
+	char *name;
+	int count; /*number of columns in table*/
+	char *col_names[DB_MAX_COLUMNS];
+	enum db_type cols[DB_MAX_COLUMNS]; 
+	int clamp[DB_MAX_COLUMNS][2]; 
 	int ai[DB_MAX_COLUMNS]; 
 	int row;
 	union Uni_list data[DB_MAX_COLUMNS];
