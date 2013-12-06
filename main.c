@@ -374,6 +374,11 @@ copy_table_row(struct Table *to, struct Table *from, size_t i) {
 	struct List_db_string *old_string, *new_string;
 	struct List_db_int *old_int, *new_int;
 
+	if (from->data[i].db_type_void == NULL) {
+		to->data[i].db_type_void = to->last_row[i].db_type_void = NULL;
+		return ;
+	}
+
 	switch(to->cols[i]) {
 		case db_type_int:
 			new_int = to->data[i].db_type_int = (struct List_db_int *)malloc(sizeof(struct List_db_int));
@@ -410,47 +415,6 @@ copy_table_row(struct Table *to, struct Table *from, size_t i) {
 			break;
 	}
 
-		/*switch(t->cols[i]) {
-			case db_type_int:
-				oint = from->data[i].db_type_int;
-				nint = (struct List_db_int *)malloc(sizeof(struct List_db_int ));
-				nint->v = oint->v;
-				nint->next = NULL;
-				new.db_type_int = nint;
-
-				while ((oint = oint->next) != NULL) {
-					xint = (struct List_db_int *)malloc(sizeof(struct List_db_int ));
-					xint->v = oint->v;
-
-					nint->next = xint;
-					xint->prev = nint;
-					xint->next = NULL;
-
-					nint = xint;
-				} 
-				break;
-			case db_type_string:
-				ostring = t->data[ind].db_type_string;
-				nstring = (struct List_db_string *)malloc(sizeof(struct List_db_string ));
-				strncpy(nstring->v, ostring->v, DB_STRING_LEN);
-				nstring->prev = nstring->next = NULL;
-				new.db_type_string = nstring;
-				while ((ostring = ostring->next) != NULL) {
-					xstring = (struct List_db_string *)malloc(sizeof(struct List_db_string ));
-					strncpy(xstring->v, ostring->v, DB_STRING_LEN);
-
-					nstring->next = xstring;
-					xstring->prev = nstring;
-					xstring->next = NULL;
-
-					nstring = xstring;
-				} 
-				break;
-			default:
-				die(ERR_UNKNOWN_COLUMN_TYPE, t->col_names[ind], t->name);
-				break;
-		}
-	}*/
 }
 struct List_size_t *
 add_size_t_list(struct List_size_t *last, struct List_size_t **start, int i) {
@@ -525,74 +489,6 @@ filter_list(struct Table *t, size_t filter_col_id, enum db_where_cond where_cond
 }
 
 void
-filter(struct Table *t, struct List_size_t *rows_left, int rows_left_len) {
-	int diff, i, j;
-	size_t cur_ind;
-	struct List_db_void *last, **last_left, *temp;
-
-	last_left = (struct List_db_void **)calloc(sizeof(struct List_db_void), t->count);
-	cur_ind = 0;
-
-	diff = rows_left->v - cur_ind;
-	for (i = 0; i < t->count; i++)  {
-		for (j = 0; j < diff; j++) {
-			last = t->data[i].db_type_void->next;
-			free(t->data[i].db_type_void);
-			t->data[i].db_type_void = last;
-		}
-		last_left[i] = t->data[i].db_type_void;
-	}
-	t->row -= diff;
-
-	cur_ind = rows_left->v + 1;
-	rows_left = rows_left->next;
-
-
-	while (rows_left != NULL) {
-		diff = rows_left->v - cur_ind;
-		if (diff > 0) {
-			for (i = 0; i < t->count; i++) {
-				last = last_left[i]->next;
-				for (j = 0; j < diff; j++) {
-					temp = last->next;
-					free(last);
-					last = temp;
-				}
-				last_left[i]->next = last;
-				last_left[i] = last;
-
-				t->last_row[i].db_type_void = last_left[i];
-			}
-			t->row -= diff;
-		} else {
-			for (i = 0; i < t->count; i++) {
-				last_left[i] = last_left[i]->next;
-				t->last_row[i].db_type_void = last_left[i];
-			}
-		}
-		cur_ind = rows_left->v + 1;
-		rows_left = rows_left->next;
-	}
-	cur_ind -= 1;
-	if (cur_ind < t->row) {
-		diff = t->row - cur_ind;
-		for (i = 0; i < t->count; i++) {
-			last = last_left[i]->next;
-			for (j = 0; j < diff; j++) {
-				temp = last->next;
-				free(last);
-				last = temp;
-			}
-			last_left[i]->next = last;
-			last_left[i] = last;
-
-			t->last_row[i].db_type_void = last_left[i];
-		}
-		t->row -= diff;
-	}
-}
-
-void
 free_data(struct Table *t) {
 	int i;
 	struct List_db_void *next, *temp;
@@ -608,6 +504,99 @@ free_data(struct Table *t) {
 	}
 	t->row = 0;
 }
+
+void
+filter(struct Table *t, struct List_size_t *rows_left, int rows_left_len) {
+	int diff, i, j, prev_length;
+	size_t cur_ind;
+	struct List_db_void *last, **last_left, *temp;
+
+	if (rows_left == NULL) {
+		free_data(t);
+		return ;
+	}
+
+	/*last_left = (struct List_db_void **)calloc(sizeof(struct List_db_void), t->count);*/
+	prev_length = t->row;
+
+	cur_ind = 0;
+	diff = rows_left->v;
+	for (i = 0; i < t->count; i++)  {
+		for (j = 0; j < diff; j++) {
+			last = t->data[i].db_type_void->next;
+			free(t->data[i].db_type_void);
+			t->data[i].db_type_void = last;
+		}
+		/*last_left[i] = t->data[i].db_type_void;*/
+		t->last_row[i] = t->data[i];
+	}
+	t->row -= diff;
+
+	/*cur_ind = rows_left->v + 1;*/
+	cur_ind = diff;
+	rows_left = rows_left->next;
+
+
+	while (rows_left != NULL) {
+		diff = rows_left->v - cur_ind - 1;
+		/*if (diff > 0) {*/
+			for (i = 0; i < t->count; i++) {
+				/*last = last_left[i]->next;*/
+				last = t->last_row[i].db_type_void->next;
+				for (j = 0; j < diff; j++) {
+					temp = last->next;
+					free(last);
+					last = temp;
+				}
+				/*last_left[i]->next = last;
+				last_left[i] = last;*/
+				t->last_row[i].db_type_void->next = last;
+				t->last_row[i].db_type_void = last;
+
+				/*t->last_row[i].db_type_void = last_left[i];*/
+			}
+			t->row -= diff;
+		/*} else {
+			for (i = 0; i < t->count; i++) {
+				last_left[i] = last_left[i]->next;
+				t->last_row[i].db_type_void = last_left[i];
+			}
+		}*/
+
+		cur_ind = rows_left->v;/* + 1;*/
+		rows_left = rows_left->next;
+	}
+	
+	for (i = 0; i < t->count; i++) {
+		last = t->last_row[i].db_type_void->next;
+		diff = 0;
+		while (last != NULL) {
+			temp = last->next;
+			free(last);
+			last = temp;
+			diff++;
+		}
+		t->last_row[i].db_type_void->next = NULL;
+	}
+	t->row -= diff;
+
+	/*cur_ind -= 1;*/
+	/*prev_length -= 1;
+	if (cur_ind < prev_length) {
+		diff = prev_length - cur_ind;
+		for (i = 0; i < t->count; i++) {
+			last = t->last_row[i].db_type_void->next;
+			for (j = 0; j < diff; j++) {
+				temp = last->next;
+				free(last);
+				last = temp;
+			}
+			t->last_row[i].db_type_void = last;
+		}
+		t->row -= diff;
+	}*/
+}
+
 
 void
 table_copy(struct Table *to, struct Table *from) {
@@ -771,7 +760,7 @@ main() {
 					filter(t, left_rows, left_rows_len);
 				} else {
 					i = t->row;
-					free_data(&temp_t);
+					free_data(t);
 				}
 				printf("Liczba usunietych rekordow: %d" ENDL, i);
 				break;

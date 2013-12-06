@@ -1,8 +1,8 @@
 dodaj studenci(nazwisko, imie, indeks) ("Al piestor", "Mohammed", 101)
-dodaj studenci(indeks, nazwisko, imie) (10, "Uchicha", "Itachi") (20, "Uchicha", "Sasuke")
+dodaj studenci(indeks, nazwisko, imie) (10, "Uchicha", "Itachi") (1234, "Uchicha", "Sasuke")
 dodaj studenci (1234, "Szymon", "Olewniczak") (4435, "Jan", "Kanty")
 
-wypisz studenci(indeks,nazwisko,imie) gdzie indeks ! 10 zakres 2- 3
+wypisz studenci(indeks,nazwisko,imie) gdzie indeks = 1234 zakres 2- 3
 
 wypisz studenci(indeks,nazwisko,imie) 
 
