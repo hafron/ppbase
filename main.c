@@ -40,8 +40,6 @@ isrestr(int c) {
 int
 filerestr(int c) {
 	switch(c) {
-		case '/':
-		case '\\':
 		case '\n':
 			return 1;
 			break;
@@ -713,44 +711,59 @@ t_sort(struct Table *t, int rev) {
 int
 save(struct Table *t, char *file) {
 	FILE *fp;
-	struct List_db_int *L_int;
-	struct List_db_string *L_string;
-	int i;
+	int i, j;
+	union Uni_list data[DB_MAX_COLUMNS];
 
 	if ((fp = fopen(file, "wb")) == NULL) {
 		fprintf(stderr, "Cannot open file: %s for writing." ENDL, file);
 		return 0;
 	}
 
-	if (fwrite(t, sizeof(struct Table), 1, fp) != sizeof(struct Table)) {
-		fprintf(stderr, "Cannot save table metadata to file: %s." ENDL, file);
+	for (i = 0; i < t->count; i++) {
+		data[i].db_type_void = t->data[i].db_type_void;
+	}
+	for (i = 0; i < t->row; i++) {
+		for (j = 0; j < t->count; j++) {
+			switch (t->cols[j]) {
+				case db_type_int:
+					fprintf(fp, "%d%s", data[j].db_type_int->v, j == t->count-1 ? ENDL : ",");
+					break;
+				case db_type_string:
+					fprintf(fp, "\"%s\"%s", data[j].db_type_string->v, j == t->count-1 ? ENDL : ",");
+					break;
+				default:
+					die(ERR_UNKNOWN_COLUMN_TYPE, t->col_names[j], t->name);
+					break;
+			}
+			data[j].db_type_void = data[j].db_type_void->next;
+		}
+	}
+	fclose(fp);
+	return 1;
+}
+
+int
+load(struct Table *t, char *file) {
+	int i, order[DB_MAX_COLUMNS];
+	char line[LINE_LEN];
+	union Row *urows;
+	FILE *fp;
+
+	if ((fp = fopen(file, "rb")) == NULL) {
+		fprintf(stderr, "Cannot open file: %s for writing." ENDL, file);
 		return 0;
 	}
 
-	for (i = 0; i < t->count; t++) {
-		switch (t->cols[i]) {
-			case db_type_int:
-				for (L_int = t->data[i].db_type_int; L_int != NULL; L_int = L_int->next) {
-					if (fwrite(L_int, sizeof(struct List_db_int), 1, fp) != sizeof(struct List_db_int)) {
-						fprintf(stderr, "Cannot save table row: %s." ENDL, t->col_names[i]);
-						return 0;
-					}
-				}
-				break;
-			case db_type_string:
-				for (L_string = t->data[i].db_type_string; L_string != NULL; L_string = L_string->next) {
-					if (fwrite(L_string, sizeof(struct List_db_string), 1, fp) != sizeof(struct List_db_string)) {
-						fprintf(stderr, "Cannot save table row: %s." ENDL, t->col_names[i]);
-						return 0;
-					}
-				}
-				break;
-			default:
-				fprintf(stderr, "Cannot save unknown column type: %s.", t->col_names[i]);
-				return 0;
-		}
+	free_data(t);
+	for (i = 0; i < t->count; i++) {
+		order[i] = i;
 	}
 
+	while (fgets(line, LINE_LEN, fp) != NULL) {
+		urows = (union Row *) calloc(t->count, sizeof(union Row));
+		get_cell(t, line, urows, order, t->count);
+		db_add_row(t, urows);
+	}
 	fclose(fp);
 	return 1;
 }
@@ -758,7 +771,7 @@ save(struct Table *t, char *file) {
 int
 main() {
 	int i, j, k, order_len, desc, filter_col_id, sort_col_id;
-	int order[DB_MAX_COLUMNS+1];/* +1 for "-1" which indicates end of the row */
+	int order[DB_MAX_COLUMNS];
 	size_t limit_start, limit_rows, left_rows_len;
 	char line[LINE_LEN], command[LINE_LEN], table[LINE_LEN], row[LINE_LEN], sort_col[LINE_LEN];
 	char where_col[LINE_LEN], where_val[LINE_LEN];
@@ -940,6 +953,22 @@ main() {
 				if (save(t, file_name) == 0)
 					;/*don't deal with errors*/
 
+				fputs("OK" ENDL, stdout);
+				break;
+			case wczytaj:
+				pline = getword(pline, table, LINE_LEN, isrestr);
+				if ((t = gettab(table)) == NULL) {
+					printf("Unknown table '%s'." ENDL, table);
+					goto command_loop;
+				}
+				pline = getword(pline, file_name, FILE_LEN, filerestr);
+				if (strlen(file_name) == 0) {
+					strncpy(file_name, table, FILE_LEN);
+				}
+				if (load(t, file_name) == 0) {
+					free_data(t);
+					fprintf(stderr, "Error while reading table: %s from file: %s." ENDL, t->name, file_name);
+				}
 				fputs("OK" ENDL, stdout);
 				break;
 			case koniec:
