@@ -83,27 +83,6 @@ const_strcmp(const void *s1, const void *s2) {
 	return strcmp(key, *arg);
 }
 
-void
-init_database() {
-	int tab_count, i, j;
-	struct Table *t;
-	tab_count = COUNT(db_tables);
-	for (i = 0, t = db_tables; i < tab_count; i++, t++) {
-		for (j = 0; j < t->count; j++)
-			switch (t->cols[j]) {
-				case db_type_int:
-					/*t->data[j] = calloc(DB_MAX_COLUMNS, sizeof(db_int));*/
-					break;
-				case db_type_string:
-					/*t->data = calloc(DB_MAX_COLUMNS, sizeof(db_string));*/
-					break;
-				default:
-					die(ERR_UNKNOWN_COLUMN_TYPE, t->col_names[j], t->name);
-					break;
-			}
-	}
-}
-
 char *
 get_row_token(const char *line, char *row, int row_len) {
 	char *pline, *prow;
@@ -977,7 +956,7 @@ main() {
 				for (i = 0; i < j; i++) {
 					strncpy(file_name, db_tables[i].name, FILE_LEN);
 					strncat(file_name, FILE_EXT, FILE_LEN);
-					if (save(t, file_name) == 0)
+					if (save(&db_tables[i], file_name) == 0)
 						;/*don't deal with errors*/
 				}
 				fputs("OK" ENDL, stdout);
@@ -988,7 +967,7 @@ main() {
 				for (i = 0; i < j; i++) {
 					strncpy(file_name, db_tables[i].name, FILE_LEN);
 					strncat(file_name, FILE_EXT, FILE_LEN);
-					if (load(t, file_name) == 0) {
+					if (load(&db_tables[i], file_name) == 0) {
 						for (k = 0; k < j; k++) {
 							free_data(&db_tables[k]);
 						}
