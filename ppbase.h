@@ -20,6 +20,7 @@
 #define LIMIT_INT_MAX_LEN 50+1
 
 #define FILE_LEN 255+1
+#define FILE_EXT ".csv"
 
 struct List_size_t {
 	size_t v;

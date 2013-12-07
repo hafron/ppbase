@@ -949,6 +949,7 @@ main() {
 				pline = getword(pline, file_name, FILE_LEN, filerestr);
 				if (strlen(file_name) == 0) {
 					strncpy(file_name, table, FILE_LEN);
+					strncat(file_name, FILE_EXT, FILE_LEN);
 				}
 				if (save(t, file_name) == 0)
 					;/*don't deal with errors*/
@@ -964,12 +965,38 @@ main() {
 				pline = getword(pline, file_name, FILE_LEN, filerestr);
 				if (strlen(file_name) == 0) {
 					strncpy(file_name, table, FILE_LEN);
+					strncat(file_name, FILE_EXT, FILE_LEN);
 				}
 				if (load(t, file_name) == 0) {
 					free_data(t);
-					fprintf(stderr, "Error while reading table: %s from file: %s." ENDL, t->name, file_name);
 				}
 				fputs("OK" ENDL, stdout);
+				break;
+			case zapiszwszystko:
+				j = COUNT(db_tables);
+				for (i = 0; i < j; i++) {
+					strncpy(file_name, db_tables[i].name, FILE_LEN);
+					strncat(file_name, FILE_EXT, FILE_LEN);
+					if (save(t, file_name) == 0)
+						;/*don't deal with errors*/
+				}
+				fputs("OK" ENDL, stdout);
+
+				break;
+			case wczytajwszystko:
+				j = COUNT(db_tables);
+				for (i = 0; i < j; i++) {
+					strncpy(file_name, db_tables[i].name, FILE_LEN);
+					strncat(file_name, FILE_EXT, FILE_LEN);
+					if (load(t, file_name) == 0) {
+						for (k = 0; k < j; k++) {
+							free_data(&db_tables[k]);
+						}
+						break;
+					}
+				}
+				fputs("OK" ENDL, stdout);
+
 				break;
 			case koniec:
 				exit(EXIT_SUCCESS);
