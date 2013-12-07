@@ -38,6 +38,18 @@ isrestr(int c) {
 	}
 }
 int
+filerestr(int c) {
+	switch(c) {
+		case '/':
+		case '\\':
+		case '\n':
+			return 1;
+			break;
+		default:
+			return 0;
+	}
+}
+int
 is_where_restr(int c) {
 	if (isrestr(c))
 		return 1;
@@ -200,10 +212,9 @@ get_cell(const struct Table *t, const char *row, union Row *urows, const int *or
 	for (i = 0; i < order_len; i++) {
 		j = order[i];
 		prow = get_token(prow, token, LINE_LEN);
-		if (*token == '\0') {
-			fprintf(stderr, "Wrong command format." ENDL);
+		if (*token == '\0')
 			break;
-		}
+
 		switch (t->cols[j]) {
 			case db_type_int:
 				urows[j].db_type_int = atoi(token);
@@ -421,6 +432,7 @@ add_size_t_list(struct List_size_t *last, struct List_size_t **start, int i) {
 	struct List_size_t *new;
 	new = (struct List_size_t *)malloc(sizeof(struct List_size_t));
 	new->v = i;
+	new->next = NULL;
 	if (*start == NULL) {
 		*start = new;
 	} else if(last != NULL) {
@@ -654,7 +666,12 @@ int
 compare(struct List_db_void *a, struct List_db_void *b, enum db_type type) {
 	switch(type) {
 		case db_type_int:
-			return ((struct List_db_int *)a)->v > ((struct List_db_int *)b)->v;
+			if (((struct List_db_int *)a)->v > ((struct List_db_int *)b)->v)
+				return 1;
+			else if (((struct List_db_int *)a)->v < ((struct List_db_int *)b)->v)
+				return -1;
+			else
+				return 0;
 		case db_type_string:
 			return strcmp(((struct List_db_string *)a)->v, ((struct List_db_string *)b)->v);
 		default:
@@ -663,44 +680,79 @@ compare(struct List_db_void *a, struct List_db_void *b, enum db_type type) {
 	return 0;
 }
 void
-t_sort(struct Table *t) {
+t_sort(struct Table *t, int rev) {
 	int i, j, k, cmp;
 	struct List_db_void *act_row[DB_MAX_COLUMNS], *cmp_row[DB_MAX_COLUMNS];
-	for (i = 0; i < t->count; i++) {
-		act_row[i] = t->data[i].db_type_void;
-	}
+
 	for (k = 0; k < t->row-1; k++) {
+		for (i = 0; i < t->count; i++) {
+			act_row[i] = t->data[i].db_type_void;
+		}
 		for (i = 0; i < t->count; i++) {
 			cmp_row[i] = act_row[i]->next;
 		}
 		for (j = k+1; j < t->row; j++) {
 			for (i = 0; i < t->count; i++) {
-				if ((cmp = compare(act_row[i], cmp_row[i], t->cols[i])) > 0) {
-					/*swap row*/
+				if ((cmp = rev*compare(act_row[i], cmp_row[i], t->cols[i])) > 0) {
 					r_swap(t, act_row, cmp_row);
-				} 
+					break;
+				} else if(cmp < 0) {
+					break;
+				}
 			}
-
+			for (i = 0; i < t->count; i++) {
+				act_row[i] = act_row[i]->next;
+			}
 			for (i = 0; i < t->count; i++) {
 				cmp_row[i] = cmp_row[i]->next;
 			}
 		}
-		for (i = 0; i < t->count; i++) {
-			act_row[i] = act_row[i]->next;
-		}
 	}
 }
 
-void
-reverse(struct Table *t) {
-	/*size_t i;
-	union Uni_list new_root, next, root;
-	for (i = 0; i < t->count; i++) {
-		new_root = NULL;
-		root = t->data[i];
-		while (root != NULL) {
+int
+save(struct Table *t, char *file) {
+	FILE *fp;
+	struct List_db_int *L_int;
+	struct List_db_string *L_string;
+	int i;
+
+	if ((fp = fopen(file, "wb")) == NULL) {
+		fprintf(stderr, "Cannot open file: %s for writing." ENDL, file);
+		return 0;
+	}
+
+	if (fwrite(t, sizeof(struct Table), 1, fp) != sizeof(struct Table)) {
+		fprintf(stderr, "Cannot save table metadata to file: %s." ENDL, file);
+		return 0;
+	}
+
+	for (i = 0; i < t->count; t++) {
+		switch (t->cols[i]) {
+			case db_type_int:
+				for (L_int = t->data[i].db_type_int; L_int != NULL; L_int = L_int->next) {
+					if (fwrite(L_int, sizeof(struct List_db_int), 1, fp) != sizeof(struct List_db_int)) {
+						fprintf(stderr, "Cannot save table row: %s." ENDL, t->col_names[i]);
+						return 0;
+					}
+				}
+				break;
+			case db_type_string:
+				for (L_string = t->data[i].db_type_string; L_string != NULL; L_string = L_string->next) {
+					if (fwrite(L_string, sizeof(struct List_db_string), 1, fp) != sizeof(struct List_db_string)) {
+						fprintf(stderr, "Cannot save table row: %s." ENDL, t->col_names[i]);
+						return 0;
+					}
+				}
+				break;
+			default:
+				fprintf(stderr, "Cannot save unknown column type: %s.", t->col_names[i]);
+				return 0;
 		}
-	}*/
+	}
+
+	fclose(fp);
+	return 1;
 }
 
 int
@@ -710,6 +762,7 @@ main() {
 	size_t limit_start, limit_rows, left_rows_len;
 	char line[LINE_LEN], command[LINE_LEN], table[LINE_LEN], row[LINE_LEN], sort_col[LINE_LEN];
 	char where_col[LINE_LEN], where_val[LINE_LEN];
+	char file_name[FILE_LEN];
     char *pline;
 	const char **pcommand;
 
@@ -721,6 +774,7 @@ main() {
 
 	enum db_where_cond where_cond;
 
+	puts("dzien dobry");
 
 	command_loop:
 	while (fgets(line, LINE_LEN, stdin) != NULL) {
@@ -769,16 +823,6 @@ main() {
 					goto command_loop;
 				} 
 
-				if (desc != -1)
-					t_swap(&temp_t, 0, sort_col_id);
-
-				t_sort(&temp_t);
-				if (desc == 0)
-					reverse(&temp_t);
-
-				if (desc != -1)
-					t_swap(&temp_t, 0, sort_col_id);
-
 				pline = get_where(pline, where_col, LINE_LEN, where_val, LINE_LEN, &where_cond);
 				if (where_cond != -1 && (filter_col_id = col_id(t, where_col)) == -1) {
 					fprintf(stderr, ERR_UNKNOWN_COLUMN, where_col, t->name);
@@ -793,12 +837,29 @@ main() {
 				if (limit_rows == -1) {
 					fprintf(stderr, "Command '%s': wrong format", COMMAND_LIMIT);
 					goto command_loop;
-				}
+				} 
 
 				if (temp_t.row > 0 && where_cond != -1) {
 					left_rows = filter_list(&temp_t, filter_col_id, where_cond, where_val, &left_rows_len);
 					filter(&temp_t, left_rows, left_rows_len);
 				}
+
+				if (desc != -1)
+					t_swap(&temp_t, 0, sort_col_id);
+
+				t_sort(&temp_t, desc == 1 ? -1 : 1);
+
+				if (desc != -1)
+					t_swap(&temp_t, 0, sort_col_id);
+
+				/*LIMIT*/
+				if(limit_rows == 0) {
+					limit_start = 0;
+					limit_rows = temp_t.row;
+				} else {
+					temp_t.row = limit_rows;
+				}
+
 				printf("Liczba rekordow: %d" ENDL, temp_t.row);
 				/*after filtering*/
 				if (temp_t.row > 0) {
@@ -812,24 +873,28 @@ main() {
 						temp_t.data[i] = data[k];
 					}
 
+					for (i = 0; i < limit_start; i++)
+						for (j = 0; j < order_len; j++)
+							temp_t.data[j].db_type_void = temp_t.data[j].db_type_void->next;
+						
 
-					for (i = 0; i < temp_t.row; i++) 
+					for (i = 0; i < limit_rows; i++) {
 						for (j = 0; j < order_len; j++) {
 							k = order[j];
 							switch (temp_t.cols[k]) {
 								case db_type_int:
 									printf("%d%s", temp_t.data[j].db_type_int->v, j == order_len-1 ? ENDL : " ");
-									temp_t.data[j].db_type_int = temp_t.data[j].db_type_int->next;
 									break;
 								case db_type_string:
 									printf("%s%s", temp_t.data[j].db_type_string->v, j == order_len-1 ? ENDL : " ");
-									temp_t.data[j].db_type_string = temp_t.data[j].db_type_string->next;
 									break;
 								default:
 									die(ERR_UNKNOWN_COLUMN_TYPE, temp_t.col_names[k], temp_t.name);
 									break;
 							}
+							temp_t.data[j].db_type_void = temp_t.data[j].db_type_void->next;
 						}
+					}
 				}
 				/*Free the memory*/
 				free_data(&temp_t);
@@ -861,6 +926,21 @@ main() {
 					free_data(t);
 				}
 				printf("Liczba usunietych rekordow: %d" ENDL, i);
+				break;
+			case zapisz:
+				pline = getword(pline, table, LINE_LEN, isrestr);
+				if ((t = gettab(table)) == NULL) {
+					printf("Unknown table '%s'." ENDL, table);
+					goto command_loop;
+				}
+				pline = getword(pline, file_name, FILE_LEN, filerestr);
+				if (strlen(file_name) == 0) {
+					strncpy(file_name, table, FILE_LEN);
+				}
+				if (save(t, file_name) == 0)
+					;/*don't deal with errors*/
+
+				fputs("OK" ENDL, stdout);
 				break;
 			case koniec:
 				exit(EXIT_SUCCESS);

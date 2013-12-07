@@ -1,5 +1,5 @@
 #define LINE_MAX 4096
-#define LINE_LEN LINE_MAX+1+1 /*new line in unix contains one char + \0 char*/
+#define LINE_LEN LINE_MAX+2+1 /*new line in windows contains two chars + \0 char*/
 #define ENDL "\n"
 #define PROMPT "? "
 
@@ -19,16 +19,7 @@
 
 #define LIMIT_INT_MAX_LEN 50+1
 
-
-#ifdef WINDOWS
-#undef LINE_LEN
-#define LINE_LEN LINE_MAX+2+1 /*new line in windows contains two chars + \0 char*/
-#endif
-
-#ifdef WINDOWS
-#undef ENDL
-#define ENDL "\r\n"
-#endif
+#define FILE_LEN 255+1
 
 struct List_size_t {
 	size_t v;
@@ -41,6 +32,7 @@ enum db_where_cond {none, lt, gt, eq, neq, le, ge};
 #define COUNT(o) (sizeof(o)/sizeof((o)[0]))
 
 void die(const char *errstr, ...);
+
 /* Save one word from char *line into char *word
  * @return char *p line without found world
  */

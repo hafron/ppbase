@@ -1,8 +1,7 @@
 SRC = main.c 
 OBJ = ${SRC:.c=.o}
-PLATFORM = UNIX
 
-CFLAGS = -ansi -pedantic -Wall -ggdb3 -D${PLATFORM}
+CFLAGS = -ansi -pedantic -Wall -ggdb3
 
 all: options ppbase
 
