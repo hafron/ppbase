@@ -1,0 +1,5 @@
+dodaj studenci(indeks, imie) (10000, "Mohammed")
+dodaj studenci(indeks, nazwisko, imie) (101, "Uchicha", "Itachi") (50, "Uchicha", "Sasuke")
+dodaj studenci (1234, "Szymon", "Olewniczak") (4435, "Jan", "Kanty")
+
+wypisz studenci wedlug imie

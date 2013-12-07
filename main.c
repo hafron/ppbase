@@ -609,6 +609,99 @@ de_morgan(enum db_where_cond cond) {
 			return -1;
 	}
 }
+void
+t_swap(struct Table *t, size_t pos, size_t elm) {
+	size_t i;
+	union Uni_list temp_list;
+	enum db_type temp_type;
+
+
+	for (i = elm; i > pos; i--) {
+		temp_list = t->data[i-1];
+		t->data[i-1] = t->data[i];
+		t->data[i] = temp_list;
+
+		temp_type = t->cols[i-1];
+		t->cols[i-1] = t->cols[i];
+		t->cols[i] = temp_type;
+
+	}
+}
+void r_swap(struct Table *t, struct List_db_void *a[DB_MAX_COLUMNS], struct List_db_void *b[DB_MAX_COLUMNS]) {
+	int i;
+
+	db_int i_val;
+	db_string s_val;
+
+	for (i = 0; i < t->count; i++) {
+		switch (t->cols[i]) {
+			case db_type_int:
+				i_val = ((struct List_db_int *)a[i])->v;
+				((struct List_db_int *)a[i])->v = ((struct List_db_int *)b[i])->v;
+				((struct List_db_int *)b[i])->v = i_val;
+				break;
+			case db_type_string:
+				strcpy(s_val, ((struct List_db_string *)a[i])->v);
+				strcpy(((struct List_db_string *)a[i])->v, ((struct List_db_string *)b[i])->v);
+				strcpy(((struct List_db_string *)b[i])->v, s_val);
+				break;
+			default:
+				die("r_swap: " ERR_UNKNOWN_COLUMN_TYPE, t->col_names[i], t->name);
+		}
+	}
+}
+int
+compare(struct List_db_void *a, struct List_db_void *b, enum db_type type) {
+	switch(type) {
+		case db_type_int:
+			return ((struct List_db_int *)a)->v > ((struct List_db_int *)b)->v;
+		case db_type_string:
+			return strcmp(((struct List_db_string *)a)->v, ((struct List_db_string *)b)->v);
+		default:
+			die("compare: Unknown column type.");
+	}
+	return 0;
+}
+void
+t_sort(struct Table *t) {
+	int i, j, k, cmp;
+	struct List_db_void *act_row[DB_MAX_COLUMNS], *cmp_row[DB_MAX_COLUMNS];
+	for (i = 0; i < t->count; i++) {
+		act_row[i] = t->data[i].db_type_void;
+	}
+	for (k = 0; k < t->row-1; k++) {
+		for (i = 0; i < t->count; i++) {
+			cmp_row[i] = act_row[i]->next;
+		}
+		for (j = k+1; j < t->row; j++) {
+			for (i = 0; i < t->count; i++) {
+				if ((cmp = compare(act_row[i], cmp_row[i], t->cols[i])) > 0) {
+					/*swap row*/
+					r_swap(t, act_row, cmp_row);
+				} 
+			}
+
+			for (i = 0; i < t->count; i++) {
+				cmp_row[i] = cmp_row[i]->next;
+			}
+		}
+		for (i = 0; i < t->count; i++) {
+			act_row[i] = act_row[i]->next;
+		}
+	}
+}
+
+void
+reverse(struct Table *t) {
+	/*size_t i;
+	union Uni_list new_root, next, root;
+	for (i = 0; i < t->count; i++) {
+		new_root = NULL;
+		root = t->data[i];
+		while (root != NULL) {
+		}
+	}*/
+}
 
 int
 main() {
@@ -664,15 +757,27 @@ main() {
 					printf("Unknown table '%s'." ENDL, table);
 					goto command_loop;
 				}
+
+				table_copy(&temp_t, t);
 				
 				if ((pline = determine_order(t, pline, order, &order_len)) == NULL)
 					goto command_loop;
 
 				pline = get_sort(pline, sort_col, LINE_LEN, &desc);
-				if (desc != -1 && (sort_col_id = col_id(t, sort_col) == -1)) {
+				if (desc != -1 && (sort_col_id = col_id(t, sort_col)) == -1) {
 					fprintf(stderr, ERR_UNKNOWN_COLUMN, sort_col, t->name);
 					goto command_loop;
-				}
+				} 
+
+				if (desc != -1)
+					t_swap(&temp_t, 0, sort_col_id);
+
+				t_sort(&temp_t);
+				if (desc == 0)
+					reverse(&temp_t);
+
+				if (desc != -1)
+					t_swap(&temp_t, 0, sort_col_id);
 
 				pline = get_where(pline, where_col, LINE_LEN, where_val, LINE_LEN, &where_cond);
 				if (where_cond != -1 && (filter_col_id = col_id(t, where_col)) == -1) {
@@ -690,7 +795,6 @@ main() {
 					goto command_loop;
 				}
 
-				table_copy(&temp_t, t);
 				if (temp_t.row > 0 && where_cond != -1) {
 					left_rows = filter_list(&temp_t, filter_col_id, where_cond, where_val, &left_rows_len);
 					filter(&temp_t, left_rows, left_rows_len);
