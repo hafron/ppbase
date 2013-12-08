@@ -1,0 +1,7 @@
+dodaj sale ("mongo", 100, falsz, 15.55)
+dodaj sale ("amongo", 44, prawda, 1.44)
+
+wypisz sale gdzie projektor=prawda
+wypisz sale gdzie nazwa="amongo"
+
+wypisz sale

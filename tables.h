@@ -9,7 +9,6 @@ enum db_type {db_type_string, db_type_int, db_type_double, db_type_bool, db_type
 typedef int db_int;
 typedef double db_double;
 typedef char db_string[DB_STRING_LEN];
-typedef int db_bool;
 typedef unsigned db_ai;
 
 struct List_db_int {
@@ -20,6 +19,10 @@ struct List_db_string {
 	struct List_db_string *next;
 	db_string v;
 };
+struct List_db_double {
+	struct List_db_double *next;
+	db_double v;
+};
 struct List_db_void {
 	struct List_db_void *next;
 };
@@ -27,11 +30,13 @@ struct List_db_void {
 union Row {
 	db_int db_type_int;
 	db_string db_type_string;
+	db_double db_type_double;
 };
 
 union Uni_list {
 	struct List_db_int *db_type_int;
 	struct List_db_string *db_type_string;
+	struct List_db_double *db_type_double;
 	struct List_db_void *db_type_void;
 };
 
@@ -49,5 +54,8 @@ struct Table {
 
 struct Table db_tables[] = {
 	{"liczby", 1, {"wartosc"}, {db_type_int}},
+	{"double", 2, {"v", "imie"}, {db_type_double, db_type_string}},
 	{"studenci", 3, {"indeks", "imie", "nazwisko"}, {db_type_int, db_type_string, db_type_string}},
+	{"przedmioty", 3, {"id", "nazwa", "semestr"}, {db_type_int, db_type_string, db_type_int}, {{0, 0}, {0, 0}, {1, 10}}},
+	{"sale", 4, {"nazwa", "rozmiar", "projektor", "powierzchnia"}, {db_type_string, db_type_int, db_type_bool, db_type_double}, {{0, 0}, {10, 60}}},
 };

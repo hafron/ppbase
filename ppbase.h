@@ -1,3 +1,6 @@
+#define MAX(A, B)               ((A) > (B) ? (A) : (B))
+#define MIN(A, B)               ((A) < (B) ? (A) : (B))
+
 #define LINE_MAX 4096
 #define LINE_LEN LINE_MAX+2+1 /*new line in windows contains two chars + \0 char*/
 #define ENDL "\n"
@@ -8,6 +11,10 @@
 #define TOKEN_ROW_SEPARATOR ','
 #define TOKEN_STRING_SEPARATOR '"'
 #define TOKEN_SCOPE_SEPARATOR '-'
+
+#define TRUE_STR "prawda"
+#define FALSE_STR "falsz"
+#define BOOL_LEN 6+1
 
 #define COMMAND_ORDER "wedlug"
 #define COMMAND_WHERE "gdzie"

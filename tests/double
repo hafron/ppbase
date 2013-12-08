@@ -1,0 +1,6 @@
+dodaj double (1.55, "Szymon") (4.88, "Piotr") (7.14, "Jan") (1.22, "Jerzy")
+
+wypisz double
+wypisz double gdzie v > 2
+
+zapisz double

@@ -3,7 +3,6 @@
 #include <string.h>
 #include <ctype.h>
 #include <stdarg.h>
-#include <setjmp.h>
 
 #include "ppbase.h"
 #include "tables.h"
@@ -103,10 +102,13 @@ db_add_row(struct Table *t, const union Row *urow) {
 	int i;
 	struct List_db_int *nint;
 	struct List_db_string *nstring;
+	struct List_db_double *ndouble;
+
 	if (t->row < DB_MAX_ROWS) {
 		for (i = 0; i < t->count; i++, urow++) {
 			switch (t->cols[i]) {
 				case db_type_int:
+				case db_type_bool:
 					nint = (struct List_db_int *)malloc(sizeof(struct List_db_int));
 					nint->v = urow->db_type_int;
 					nint->next = NULL;
@@ -128,8 +130,19 @@ db_add_row(struct Table *t, const union Row *urow) {
 						t->last_row[i].db_type_string= nstring;
 					}
 					break;
+				case db_type_double:
+					ndouble = (struct List_db_double *)malloc(sizeof(struct List_db_double));
+					ndouble->v = urow->db_type_double;
+					ndouble->next = NULL;
+					if (t->last_row[i].db_type_double == NULL) {
+						t->data[i].db_type_double = t->last_row[i].db_type_double = ndouble;
+					} else {
+						t->last_row[i].db_type_double->next = ndouble;
+						t->last_row[i].db_type_double= ndouble;
+					}
+					break;
 				default:
-					die(ERR_UNKNOWN_COLUMN_TYPE, t->col_names[i], t->name);
+					die("db_add_row: "ERR_UNKNOWN_COLUMN_TYPE, t->col_names[i], t->name);
 					break;
 			}
 		}
@@ -154,25 +167,36 @@ gettab(char *name) {
 char *
 get_token(const char *row, char *token, int token_len) {
 	char *prow, *ptoken;
+	char bool_str[BOOL_LEN];
 
 	for (prow = (char *)row; isspace(*prow) || *prow == ','; prow++)
 		;
 
 	ptoken = token;
-	if (*prow == TOKEN_STRING_SEPARATOR) {
-		for (prow++; token_len-- > 0 && (*ptoken = *prow) != TOKEN_STRING_SEPARATOR && *ptoken != '\0'; ptoken++, prow++)
-			;
-		if (*ptoken == TOKEN_STRING_SEPARATOR) {
-			*ptoken = '\0';
-			prow++;
-		} else {
-			fprintf(stderr, "Wrong string format." ENDL);
-			return prow;
-		}
-	} else {
-		for ( ; token_len-- > 0 && !isspace(*ptoken = *prow) && *prow != ',' && *prow != '\0'; prow++, ptoken++)
-			;
+
+	getword(prow, bool_str, BOOL_LEN, isrestr);
+	if (strcmp(bool_str, TRUE_STR) == 0) {
+		*ptoken++ = '1';
 		*ptoken = '\0';
+	} else if (strcmp(bool_str, FALSE_STR) == 0) {
+		*ptoken++ = '0';
+		*ptoken = '\0';
+	} else {
+		if (*prow == TOKEN_STRING_SEPARATOR) {
+			for (prow++; token_len-- > 0 && (*ptoken = *prow) != TOKEN_STRING_SEPARATOR && *ptoken != '\0'; ptoken++, prow++)
+				;
+			if (*ptoken == TOKEN_STRING_SEPARATOR) {
+				*ptoken = '\0';
+				prow++;
+			} else {
+				fprintf(stderr, "Wrong string format." ENDL);
+				return prow;
+			}
+		} else {
+			for ( ; token_len-- > 0 && !isspace(*ptoken = *prow) && *prow != ',' && *prow != '\0'; prow++, ptoken++)
+				;
+			*ptoken = '\0';
+		}
 	}
 
 	if (*token == '\0')
@@ -194,13 +218,17 @@ get_cell(const struct Table *t, const char *row, union Row *urows, const int *or
 
 		switch (t->cols[j]) {
 			case db_type_int:
+			case db_type_bool:
 				urows[j].db_type_int = atoi(token);
 				break;
 			case db_type_string:
 				strncpy(urows[j].db_type_string, token, DB_STRING_LEN);
 				break;
+			case db_type_double:
+				urows[j].db_type_double = atof(token);
+				break;
 			default:
-				die(ERR_UNKNOWN_COLUMN_TYPE, t->col_names[j], t->name);
+				die("get_cell: "ERR_UNKNOWN_COLUMN_TYPE, t->col_names[j], t->name);
 				break;
 		}
 	}
@@ -358,9 +386,9 @@ get_limit(char *line, size_t *start, size_t *length) {
 /*implempntation of last_row*/
 void
 copy_table_row(struct Table *to, struct Table *from, size_t i) {
-	/*struct List_db_int *nint, *xint, *oint;*/
 	struct List_db_string *old_string, *new_string;
 	struct List_db_int *old_int, *new_int;
+	struct List_db_double *old_double, *new_double;
 
 	if (from->data[i].db_type_void == NULL) {
 		to->data[i].db_type_void = to->last_row[i].db_type_void = NULL;
@@ -369,6 +397,7 @@ copy_table_row(struct Table *to, struct Table *from, size_t i) {
 
 	switch(to->cols[i]) {
 		case db_type_int:
+		case db_type_bool:
 			new_int = to->data[i].db_type_int = (struct List_db_int *)malloc(sizeof(struct List_db_int));
 			old_int = from->data[i].db_type_int;
 			
@@ -398,8 +427,23 @@ copy_table_row(struct Table *to, struct Table *from, size_t i) {
 			}
 			to->last_row[i].db_type_string = new_string;
 			break;
+		case db_type_double:
+			new_double = to->data[i].db_type_double = (struct List_db_double *)malloc(sizeof(struct List_db_double));
+			old_double = from->data[i].db_type_double;
+			
+			to->data[i].db_type_double->next = NULL;
+			to->data[i].db_type_double->v = old_double->v;
+
+			while ((old_double = old_double->next) != NULL) {
+				new_double->next = (struct List_db_double *)malloc(sizeof(struct List_db_double));
+				new_double = new_double->next;
+				new_double->v = old_double->v;
+				new_double->next = NULL;
+			}
+			to->last_row[i].db_type_double = new_double;
+			break;
 		default:
-			die(ERR_UNKNOWN_COLUMN_TYPE, to->col_names[i], to->name);
+			die("copy_table_row: "ERR_UNKNOWN_COLUMN_TYPE, to->col_names[i], to->name);
 			break;
 	}
 
@@ -421,65 +465,145 @@ add_size_t_list(struct List_size_t *last, struct List_size_t **start, int i) {
 struct List_size_t *
 filter_list(struct Table *t, size_t filter_col_id, enum db_where_cond where_cond, char *where_val, size_t *rows_left_len) {
 	struct List_size_t *start, *act;
-	int i;
-	jmp_buf env;
+	int i, add_flag;
 
 	union Row cell;
 	int order[1];
 
 	struct List_db_int *pint;
+	struct List_db_string *pstring;
+	struct List_db_double *pdouble;
 
 	order[0] = filter_col_id;
 	get_cell(t, where_val, &cell, order, 1);
 
 	start = act = NULL;
 	*rows_left_len = 0;
+
 	switch(t->cols[filter_col_id]) {
 		case db_type_int:
+		case db_type_bool:
 			pint = t->data[filter_col_id].db_type_int;
 			for (i = 0; i < t->row; i++, pint = pint->next) {
-				if (setjmp(env) == 0) {
-					switch (where_cond) {
-						case lt:
-							if (pint->v < cell.db_type_int)
-								longjmp(env, 1);
-							break;
-						case gt:
-							if (pint->v > cell.db_type_int)
-								longjmp(env, 1);
-							break;
-						case eq:
-							if (pint->v == cell.db_type_int)
-								longjmp(env, 1);
-							break;
-						case neq:
-							if (pint->v != cell.db_type_int)
-								longjmp(env, 1);
-							break;
-						case le:
-							if (pint->v <= cell.db_type_int)
-								longjmp(env, 1);
-							break;
-						case ge:
-							if (pint->v >= cell.db_type_int)
-								longjmp(env, 1);
-							break;
-						default:
-							/*You should never reach it.*/
-							return NULL;
-							break;
-					}
-				} else {
+				add_flag = 0;
+				switch (where_cond) {
+					case lt:
+						if (pint->v < cell.db_type_int)
+							add_flag = 1;
+						break;
+					case gt:
+						if (pint->v > cell.db_type_int)
+							add_flag = 1;
+						break;
+					case eq:
+						if (pint->v == cell.db_type_int)
+							add_flag = 1;
+						break;
+					case neq:
+						if (pint->v != cell.db_type_int)
+							add_flag = 1;
+						break;
+					case le:
+						if (pint->v <= cell.db_type_int)
+							add_flag = 1;
+						break;
+					case ge:
+						if (pint->v >= cell.db_type_int)
+							add_flag = 1;
+						break;
+					default:
+						/*You should never reach it.*/
+						return NULL;
+						break;
+				}
+				if (add_flag == 1) {
 					act = add_size_t_list(act, &start, i);
 					(*rows_left_len)++;
 				}
 			}
 			return start;
-			break;
 		case db_type_string:
-			break;
+			pstring = t->data[filter_col_id].db_type_string;
+			for (i = 0; i < t->row; i++, pstring = pstring->next) {
+				add_flag = 0;
+				switch (where_cond) {
+					case lt:
+						if (strcmp(pstring->v, cell.db_type_string) < 0)
+							add_flag = 1;
+						break;
+					case gt:
+						if (strcmp(pstring->v, cell.db_type_string) > 0)
+							add_flag = 1;
+						break;
+					case eq:
+						if (strcmp(pstring->v, cell.db_type_string) == 0)
+							add_flag = 1;
+						break;
+					case neq:
+						if (strcmp(pstring->v, cell.db_type_string) != 0)
+							add_flag = 1;
+						break;
+					case le:
+						if (strcmp(pstring->v, cell.db_type_string) <= 0)
+							add_flag = 1;
+						break;
+					case ge:
+						if (strcmp(pstring->v, cell.db_type_string) >= 0)
+							add_flag = 1;
+						break;
+					default:
+						/*You should never reach it.*/
+						return NULL;
+						break;
+				}
+				if (add_flag == 1) {
+					act = add_size_t_list(act, &start, i);
+					(*rows_left_len)++;
+				}
+			}
+			return start;
+		case db_type_double:
+			pdouble = t->data[filter_col_id].db_type_double;
+			for (i = 0; i < t->row; i++, pdouble = pdouble->next) {
+				add_flag = 0;
+				switch (where_cond) {
+					case lt:
+						if (pdouble->v < cell.db_type_double)
+							add_flag = 1;
+						break;
+					case gt:
+						if (pdouble->v > cell.db_type_double)
+							add_flag = 1;
+						break;
+					case eq:
+						if (pdouble->v == cell.db_type_double)
+							add_flag = 1;
+						break;
+					case neq:
+						if (pdouble->v != cell.db_type_double)
+							add_flag = 1;
+						break;
+					case le:
+						if (pdouble->v <= cell.db_type_double)
+							add_flag = 1;
+						break;
+					case ge:
+						if (pdouble->v >= cell.db_type_double)
+							add_flag = 1;
+						break;
+					default:
+						/*You should never reach it.*/
+						return NULL;
+						break;
+				}
+				if (add_flag == 1) {
+					act = add_size_t_list(act, &start, i);
+					(*rows_left_len)++;
+				}
+			}
+			return start;
 		default:
-			die(ERR_UNKNOWN_COLUMN_TYPE, t->col_names[filter_col_id], t->name);
+			die("filter_list: "ERR_UNKNOWN_COLUMN_TYPE, t->col_names[filter_col_id], t->name);
 			break;
 	}
 	return NULL;
@@ -621,10 +745,12 @@ void r_swap(struct Table *t, struct List_db_void *a[DB_MAX_COLUMNS], struct List
 
 	db_int i_val;
 	db_string s_val;
+	db_double d_val;
 
 	for (i = 0; i < t->count; i++) {
 		switch (t->cols[i]) {
 			case db_type_int:
+			case db_type_bool:
 				i_val = ((struct List_db_int *)a[i])->v;
 				((struct List_db_int *)a[i])->v = ((struct List_db_int *)b[i])->v;
 				((struct List_db_int *)b[i])->v = i_val;
@@ -633,6 +759,11 @@ void r_swap(struct Table *t, struct List_db_void *a[DB_MAX_COLUMNS], struct List
 				strcpy(s_val, ((struct List_db_string *)a[i])->v);
 				strcpy(((struct List_db_string *)a[i])->v, ((struct List_db_string *)b[i])->v);
 				strcpy(((struct List_db_string *)b[i])->v, s_val);
+				break;
+			case db_type_double:
+				d_val = ((struct List_db_double *)a[i])->v;
+				((struct List_db_double *)a[i])->v = ((struct List_db_double *)b[i])->v;
+				((struct List_db_double *)b[i])->v = d_val;
 				break;
 			default:
 				die("r_swap: " ERR_UNKNOWN_COLUMN_TYPE, t->col_names[i], t->name);
@@ -643,6 +774,7 @@ int
 compare(struct List_db_void *a, struct List_db_void *b, enum db_type type) {
 	switch(type) {
 		case db_type_int:
+		case db_type_bool:
 			if (((struct List_db_int *)a)->v > ((struct List_db_int *)b)->v)
 				return 1;
 			else if (((struct List_db_int *)a)->v < ((struct List_db_int *)b)->v)
@@ -651,6 +783,13 @@ compare(struct List_db_void *a, struct List_db_void *b, enum db_type type) {
 				return 0;
 		case db_type_string:
 			return strcmp(((struct List_db_string *)a)->v, ((struct List_db_string *)b)->v);
+		case db_type_double:
+			if (((struct List_db_double *)a)->v > ((struct List_db_double *)b)->v)
+				return 1;
+			else if (((struct List_db_double *)a)->v < ((struct List_db_double *)b)->v)
+				return -1;
+			else
+				return 0;
 		default:
 			die("compare: Unknown column type.");
 	}
@@ -710,8 +849,15 @@ save(struct Table *t, char *file) {
 				case db_type_string:
 					fprintf(fp, "\"%s\"%s", data[j].db_type_string->v, j == t->count-1 ? ENDL : ",");
 					break;
+				case db_type_double:
+					fprintf(fp, "%f%s", data[j].db_type_double->v, j == t->count-1 ? ENDL : ",");
+					break;
+				case db_type_bool:
+					fprintf(fp, "%s%s", data[j].db_type_int->v == 1 ? TRUE_STR : FALSE_STR \
+											, j == t->count-1 ? ENDL : ",");
+					break;
 				default:
-					die(ERR_UNKNOWN_COLUMN_TYPE, t->col_names[j], t->name);
+					die("save: "ERR_UNKNOWN_COLUMN_TYPE, t->col_names[j], t->name);
 					break;
 			}
 			data[j].db_type_void = data[j].db_type_void->next;
@@ -880,8 +1026,15 @@ main() {
 								case db_type_string:
 									printf("%s%s", temp_t.data[j].db_type_string->v, j == order_len-1 ? ENDL : " ");
 									break;
+								case db_type_double:
+									printf("%.3f%s", temp_t.data[j].db_type_double->v, j == order_len-1 ? ENDL : " ");
+									break;
+								case db_type_bool:
+									printf("%s%s", temp_t.data[j].db_type_int->v == 1 ? TRUE_STR : FALSE_STR \
+											, j == order_len-1 ? ENDL : " ");
+									break;
 								default:
-									die(ERR_UNKNOWN_COLUMN_TYPE, temp_t.col_names[k], temp_t.name);
+									die("main: "ERR_UNKNOWN_COLUMN_TYPE, temp_t.col_names[k], temp_t.name);
 									break;
 							}
 							temp_t.data[j].db_type_void = temp_t.data[j].db_type_void->next;
