@@ -54,7 +54,6 @@ struct Table {
 
 struct Table db_tables[] = {
 	{"liczby", 1, {"wartosc"}, {db_type_int}},
-	{"double", 2, {"v", "imie"}, {db_type_double, db_type_string}},
 	{"studenci", 3, {"indeks", "imie", "nazwisko"}, {db_type_int, db_type_string, db_type_string}},
 	{"przedmioty", 3, {"id", "nazwa", "semestr"}, {db_type_int, db_type_string, db_type_int}, {{0, 0}, {0, 0}, {1, 10}}},
 	{"sale", 4, {"nazwa", "rozmiar", "projektor", "powierzchnia"}, {db_type_string, db_type_int, db_type_bool, db_type_double}, {{0, 0}, {10, 60}}},

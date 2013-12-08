@@ -99,7 +99,7 @@ get_row_token(const char *line, char *row, int row_len) {
 
 int
 db_add_row(struct Table *t, const union Row *urow) {
-	int i;
+	int i, new_val;
 	struct List_db_int *nint;
 	struct List_db_string *nstring;
 	struct List_db_double *ndouble;
@@ -110,7 +110,12 @@ db_add_row(struct Table *t, const union Row *urow) {
 				case db_type_int:
 				case db_type_bool:
 					nint = (struct List_db_int *)malloc(sizeof(struct List_db_int));
-					nint->v = urow->db_type_int;
+					new_val = urow->db_type_int; 
+					if ( ! (t->clamp[i][0] == 0 && t->clamp[i][1] == 0)) {
+						new_val = MAX(new_val, t->clamp[i][0]);
+						new_val = MIN(new_val, t->clamp[i][1]);
+					}
+					nint->v = new_val;
 					nint->next = NULL;
 					if (t->last_row[i].db_type_int == NULL) {
 						t->data[i].db_type_int = t->last_row[i].db_type_int = nint;
@@ -198,11 +203,7 @@ get_token(const char *row, char *token, int token_len) {
 			*ptoken = '\0';
 		}
 	}
-
-	if (*token == '\0')
-		return NULL;
-	else
-		return prow;
+	return prow;
 }
 
 void
@@ -213,8 +214,6 @@ get_cell(const struct Table *t, const char *row, union Row *urows, const int *or
 	for (i = 0; i < order_len; i++) {
 		j = order[i];
 		prow = get_token(prow, token, LINE_LEN);
-		if (*token == '\0')
-			break;
 
 		switch (t->cols[j]) {
 			case db_type_int:
@@ -467,7 +466,7 @@ filter_list(struct Table *t, size_t filter_col_id, enum db_where_cond where_cond
 	struct List_size_t *start, *act;
 	int i, add_flag;
 
-	union Row cell;
+	union Row cell[DB_MAX_COLUMNS];
 	int order[1];
 
 	struct List_db_int *pint;
@@ -475,7 +474,7 @@ filter_list(struct Table *t, size_t filter_col_id, enum db_where_cond where_cond
 	struct List_db_double *pdouble;
 
 	order[0] = filter_col_id;
-	get_cell(t, where_val, &cell, order, 1);
+	get_cell(t, where_val, cell, order, 1);
 
 	start = act = NULL;
 	*rows_left_len = 0;
@@ -488,27 +487,27 @@ filter_list(struct Table *t, size_t filter_col_id, enum db_where_cond where_cond
 				add_flag = 0;
 				switch (where_cond) {
 					case lt:
-						if (pint->v < cell.db_type_int)
+						if (pint->v < cell[filter_col_id].db_type_int)
 							add_flag = 1;
 						break;
 					case gt:
-						if (pint->v > cell.db_type_int)
+						if (pint->v > cell[filter_col_id].db_type_int)
 							add_flag = 1;
 						break;
 					case eq:
-						if (pint->v == cell.db_type_int)
+						if (pint->v == cell[filter_col_id].db_type_int)
 							add_flag = 1;
 						break;
 					case neq:
-						if (pint->v != cell.db_type_int)
+						if (pint->v != cell[filter_col_id].db_type_int)
 							add_flag = 1;
 						break;
 					case le:
-						if (pint->v <= cell.db_type_int)
+						if (pint->v <= cell[filter_col_id].db_type_int)
 							add_flag = 1;
 						break;
 					case ge:
-						if (pint->v >= cell.db_type_int)
+						if (pint->v >= cell[filter_col_id].db_type_int)
 							add_flag = 1;
 						break;
 					default:
@@ -528,27 +527,27 @@ filter_list(struct Table *t, size_t filter_col_id, enum db_where_cond where_cond
 				add_flag = 0;
 				switch (where_cond) {
 					case lt:
-						if (strcmp(pstring->v, cell.db_type_string) < 0)
+						if (strcmp(pstring->v, cell[filter_col_id].db_type_string) < 0)
 							add_flag = 1;
 						break;
 					case gt:
-						if (strcmp(pstring->v, cell.db_type_string) > 0)
+						if (strcmp(pstring->v, cell[filter_col_id].db_type_string) > 0)
 							add_flag = 1;
 						break;
 					case eq:
-						if (strcmp(pstring->v, cell.db_type_string) == 0)
+						if (strcmp(pstring->v, cell[filter_col_id].db_type_string) == 0)
 							add_flag = 1;
 						break;
 					case neq:
-						if (strcmp(pstring->v, cell.db_type_string) != 0)
+						if (strcmp(pstring->v, cell[filter_col_id].db_type_string) != 0)
 							add_flag = 1;
 						break;
 					case le:
-						if (strcmp(pstring->v, cell.db_type_string) <= 0)
+						if (strcmp(pstring->v, cell[filter_col_id].db_type_string) <= 0)
 							add_flag = 1;
 						break;
 					case ge:
-						if (strcmp(pstring->v, cell.db_type_string) >= 0)
+						if (strcmp(pstring->v, cell[filter_col_id].db_type_string) >= 0)
 							add_flag = 1;
 						break;
 					default:
@@ -568,27 +567,27 @@ filter_list(struct Table *t, size_t filter_col_id, enum db_where_cond where_cond
 				add_flag = 0;
 				switch (where_cond) {
 					case lt:
-						if (pdouble->v < cell.db_type_double)
+						if (pdouble->v < cell[filter_col_id].db_type_double)
 							add_flag = 1;
 						break;
 					case gt:
-						if (pdouble->v > cell.db_type_double)
+						if (pdouble->v > cell[filter_col_id].db_type_double)
 							add_flag = 1;
 						break;
 					case eq:
-						if (pdouble->v == cell.db_type_double)
+						if (pdouble->v == cell[filter_col_id].db_type_double)
 							add_flag = 1;
 						break;
 					case neq:
-						if (pdouble->v != cell.db_type_double)
+						if (pdouble->v != cell[filter_col_id].db_type_double)
 							add_flag = 1;
 						break;
 					case le:
-						if (pdouble->v <= cell.db_type_double)
+						if (pdouble->v <= cell[filter_col_id].db_type_double)
 							add_flag = 1;
 						break;
 					case ge:
-						if (pdouble->v >= cell.db_type_double)
+						if (pdouble->v >= cell[filter_col_id].db_type_double)
 							add_flag = 1;
 						break;
 					default:
